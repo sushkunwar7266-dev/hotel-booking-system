@@ -1,0 +1,2 @@
+<?php
+require_once 'config/config.php';$u=require_login();$id=(int)($_GET['id']??0);$s=db()->prepare("UPDATE bookings SET status='cancelled' WHERE id=? AND user_id=? AND status IN ('pending','confirmed')");$s->execute([$id,$u['id']]);flash($s->rowCount()?'success':'error',$s->rowCount()?'Booking cancelled.':'Booking cannot be cancelled.');redirect('my_bookings.php');

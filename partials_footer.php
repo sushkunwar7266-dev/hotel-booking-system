@@ -1,0 +1,1 @@
+<footer class="footer"><div class="container"><strong>StayEase Hotel Booking</strong><p>Modern hotel reservation and administration system.</p></div></footer></body></html>

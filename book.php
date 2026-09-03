@@ -1,0 +1,7 @@
+<?php
+require_once 'config/config.php';$user=require_login();if($_SERVER['REQUEST_METHOD']!=='POST')redirect('rooms.php');verify_csrf();
+$roomId=(int)$_POST['room_id'];$in=$_POST['check_in'];$out=$_POST['check_out'];$guests=(int)$_POST['guests'];$special=trim($_POST['special_request']??'');
+if($in>=$out || strtotime($in)<strtotime('today')){flash('error','Invalid booking dates.');redirect('rooms.php');}
+$n=nights($in,$out);$s=db()->prepare("SELECT r.*,rt.capacity FROM rooms r JOIN room_types rt ON rt.id=r.room_type_id WHERE r.id=? AND r.status='available'");$s->execute([$roomId]);$room=$s->fetch();
+if(!$room||$guests>$room['capacity']||!is_room_available($roomId,$in,$out)){flash('error','Room is no longer available for these dates.');redirect('rooms.php?check_in='.urlencode($in).'&check_out='.urlencode($out));}
+$pdo=db();$pdo->beginTransaction();try{$code='BK'.date('ymd').strtoupper(bin2hex(random_bytes(3)));$total=$n*(float)$room['price'];$s=$pdo->prepare("INSERT INTO bookings(booking_code,user_id,room_id,check_in,check_out,guests,total_amount,status,special_request) VALUES(?,?,?,?,?,?,?,?,?)");$s->execute([$code,$user['id'],$roomId,$in,$out,$guests,$total,'pending',$special]);$bid=(int)$pdo->lastInsertId();$s=$pdo->prepare("INSERT INTO payments(booking_id,amount,method,status) VALUES(?,?,?,?)");$s->execute([$bid,$total,'demo','pending']);$pdo->commit();redirect("payment.php?id=$bid");}catch(Throwable $e){$pdo->rollBack();flash('error','Could not create booking.');redirect('rooms.php');}
