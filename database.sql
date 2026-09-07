@@ -21,8 +21,10 @@ CREATE TABLE room_types (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
+    image VARCHAR(255),
     capacity INT UNSIGNED NOT NULL DEFAULT 2,
     amenities VARCHAR(500),
+    status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -30,9 +32,13 @@ CREATE TABLE rooms (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     room_number VARCHAR(30) NOT NULL UNIQUE,
     room_type_id INT UNSIGNED NOT NULL,
+    capacity INT UNSIGNED DEFAULT 2,
     price DECIMAL(10,2) NOT NULL,
     image VARCHAR(255),
-    status ENUM('available','maintenance') DEFAULT 'available',
+    gallery TEXT,
+    description TEXT,
+    amenities VARCHAR(500),
+    status ENUM('available','unavailable','maintenance') DEFAULT 'available',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_rooms_type FOREIGN KEY (room_type_id) REFERENCES room_types(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
@@ -48,12 +54,87 @@ CREATE TABLE bookings (
     guests INT UNSIGNED NOT NULL DEFAULT 1,
     total_amount DECIMAL(10,2) NOT NULL,
     status ENUM('pending','confirmed','cancelled','checked_in','checked_out') DEFAULT 'pending',
+    payment_status ENUM('pending','paid','failed','refunded') DEFAULT 'pending',
     special_request TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_booking_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_booking_room FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE RESTRICT,
-    INDEX idx_booking_dates (room_id, check_in, check_out, status)
+    INDEX idx_booking_dates (room_id, check_in, check_out, status),
+    INDEX idx_booking_status (status, room_id, check_in, check_out),
+    CONSTRAINT chk_dates CHECK (check_out > check_in)
 ) ENGINE=InnoDB;
+
+-- Trigger to prevent overlapping bookings at database level
+DELIMITER $$
+
+CREATE TRIGGER before_booking_insert
+BEFORE INSERT ON bookings
+FOR EACH ROW
+BEGIN
+    DECLARE overlap_count INT;
+    DECLARE room_status VARCHAR(20);
+    
+    -- Check room status
+    SELECT status INTO room_status FROM rooms WHERE id = NEW.room_id;
+    
+    IF room_status != 'available' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Room is not available for booking';
+    END IF;
+    
+    -- Check for overlapping bookings
+    IF NEW.status IN ('pending', 'confirmed', 'checked_in') THEN
+        SELECT COUNT(*) INTO overlap_count
+        FROM bookings
+        WHERE room_id = NEW.room_id
+          AND status IN ('pending', 'confirmed', 'checked_in')
+          AND check_in < NEW.check_out
+          AND check_out > NEW.check_in;
+        
+        IF overlap_count > 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Booking dates overlap with existing booking';
+        END IF;
+    END IF;
+END$$
+
+CREATE TRIGGER before_booking_update
+BEFORE UPDATE ON bookings
+FOR EACH ROW
+BEGIN
+    DECLARE overlap_count INT;
+    DECLARE room_status VARCHAR(20);
+    
+    -- Only check if dates or status changed to active status
+    IF (NEW.check_in != OLD.check_in OR NEW.check_out != OLD.check_out OR NEW.status != OLD.status OR NEW.room_id != OLD.room_id) THEN
+        
+        -- Check room status
+        SELECT status INTO room_status FROM rooms WHERE id = NEW.room_id;
+        
+        IF room_status != 'available' AND NEW.status IN ('pending', 'confirmed', 'checked_in') THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Room is not available for booking';
+        END IF;
+        
+        -- Check for overlapping bookings (excluding current booking)
+        IF NEW.status IN ('pending', 'confirmed', 'checked_in') THEN
+            SELECT COUNT(*) INTO overlap_count
+            FROM bookings
+            WHERE room_id = NEW.room_id
+              AND id != NEW.id
+              AND status IN ('pending', 'confirmed', 'checked_in')
+              AND check_in < NEW.check_out
+              AND check_out > NEW.check_in;
+            
+            IF overlap_count > 0 THEN
+                SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Booking dates overlap with existing booking';
+            END IF;
+        END IF;
+    END IF;
+END$$
+
+DELIMITER ;
 
 CREATE TABLE payments (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
