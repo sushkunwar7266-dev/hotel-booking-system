@@ -141,3 +141,35 @@ Stack trace:
 #0 C:\xampp\htdocs\hotel\admin\customers.php(110): PDO->prepare('SELECT COUNT(*)...')
 #1 {main}
   thrown in C:\xampp\htdocs\hotel\admin\customers.php on line 110
+[07-Sep-2026 17:13:48 Europe/Berlin] Error [2]: file_exists(): Unable to find the wrapper &quot;..https&quot; - did you forget to enable it when you configured PHP? in C:\xampp\htdocs\hotel\admin\rooms.php on line 59
+[07-Sep-2026 17:13:54 Europe/Berlin] Error [2]: file_exists(): Unable to find the wrapper &quot;..https&quot; - did you forget to enable it when you configured PHP? in C:\xampp\htdocs\hotel\admin\rooms.php on line 59
+[07-Sep-2026 17:16:23 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41
+[07-Sep-2026 17:16:30 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41
+[07-Sep-2026 17:16:33 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41
+[07-Sep-2026 17:16:40 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41
+[07-Sep-2026 17:17:08 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41
+[07-Sep-2026 17:17:10 Europe/Berlin] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'payment_method' in 'field list' in C:\xampp\htdocs\hotel\admin\bookings.php:41
+Stack trace:
+#0 C:\xampp\htdocs\hotel\admin\bookings.php(41): PDO->prepare('INSERT INTO pay...')
+#1 {main}
+  thrown in C:\xampp\htdocs\hotel\admin\bookings.php on line 41

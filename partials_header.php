@@ -14,7 +14,7 @@ $baseUrl = dirname($baseUrl) === '/' ? '/' : rtrim(dirname($baseUrl), '/') . '/'
 <script src="/hotel/assets/app.js" defer></script>
 </head><body>
 <nav class="nav"><div class="container nav-inner"><a class="brand" href="/hotel/index.php">Stay<span>Ease</span></a>
-<div class="nav-links"><a href="/hotel/index.php">Home</a><a href="/hotel/rooms.php">Rooms</a><?php if($user): ?><a href="/hotel/my_bookings.php">My Bookings</a><?php if($user['role']==='admin'): ?><a href="/hotel/admin/index.php">Admin</a><?php endif; ?><a href="/hotel/logout.php" class="btn light">Logout</a><?php else: ?><a href="/hotel/login.php">Login</a><a href="/hotel/register.php" class="btn orange">Register</a><?php endif; ?></div></div></nav>
+<div class="nav-links"><a href="/hotel/index.php">Home</a><a href="/hotel/rooms.php">Rooms</a><?php if($user): ?><a href="/hotel/my_bookings.php">My Bookings</a><?php if($user['role']==='admin'): ?><a href="/hotel/admin/index.php">Admin</a><?php endif; ?><a href="/hotel/logout.php" class="btn light logout-link">Logout</a><?php else: ?><a href="/hotel/login.php">Login</a><a href="/hotel/register.php" class="btn orange">Register</a><?php endif; ?></div></div></nav>
 <?php if($flash): ?>
 <div id="flash-data" data-type="<?= e($flash['type']) ?>" data-message="<?= e($flash['message']) ?>" style="display:none"></div>
 <?php endif; ?>

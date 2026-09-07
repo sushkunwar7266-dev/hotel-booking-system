@@ -78,26 +78,26 @@ textarea{min-height:110px}.section{padding:52px 0}.section h2{font-size:30px;mar
 .badge.checked_out,.badge.secondary,.badge-secondary{background:#e8e9ef;color:#475467}
 
 /* Booking Cards */
-.bookings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
-.booking-card-item{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:all 0.3s ease;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
-.booking-card-item:hover{transform:translateY(-4px);box-shadow:0 8px 24px rgba(0,0,0,0.12)}
-.booking-card-image{position:relative;height:160px;overflow:hidden}
+.bookings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.booking-card-item{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:all 0.3s ease;box-shadow:0 2px 6px rgba(0,0,0,0.04)}
+.booking-card-item:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(0,0,0,0.1)}
+.booking-card-image{position:relative;height:140px;overflow:hidden}
 .booking-card-image img{width:100%;height:100%;object-fit:cover}
-.booking-status-badge{position:absolute;top:12px;right:12px;padding:6px 12px;font-size:11px;font-weight:700;text-transform:uppercase;border-radius:16px;backdrop-filter:blur(8px)}
-.booking-card-content{padding:16px}
-.booking-card-header{margin-bottom:16px}
-.booking-card-details{display:flex;flex-direction:column;gap:12px;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-.detail-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.detail-item{display:flex;gap:10px;align-items:start}
-.detail-item i{color:var(--accent);font-size:16px;margin-top:2px;width:16px;flex-shrink:0}
-.detail-label{font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;text-transform:uppercase}
-.detail-value{font-size:14px;color:var(--dark);font-weight:600}
-.booking-card-footer{padding-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.booking-status-badge{position:absolute;top:10px;right:10px;padding:4px 10px;font-size:10px;font-weight:700;text-transform:uppercase;border-radius:12px;backdrop-filter:blur(8px)}
+.booking-card-content{padding:14px}
+.booking-card-header{margin-bottom:12px}
+.booking-card-details{display:flex;flex-direction:column;gap:10px;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.detail-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.detail-item{display:flex;gap:8px;align-items:start}
+.detail-item i{color:var(--accent);font-size:14px;margin-top:2px;width:14px;flex-shrink:0}
+.detail-label{font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600;text-transform:uppercase}
+.detail-value{font-size:13px;color:var(--dark);font-weight:600}
+.booking-card-footer{padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .booking-price{flex:1}
-.price-label{font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600}
-.price-value{font-size:18px;color:var(--primary);font-weight:800}
-.booking-actions{display:flex;gap:8px;flex-wrap:wrap}
-.payment-info{background:#f6f8fb;padding:10px 14px;margin-top:12px;border-radius:8px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dark)}
+.price-label{font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600}
+.price-value{font-size:17px;color:var(--primary);font-weight:800}
+.booking-actions{display:flex;gap:6px;flex-wrap:wrap}
+.payment-info{background:#f6f8fb;padding:8px 12px;margin-top:10px;border-radius:6px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dark)}
 .payment-info i{color:var(--accent)}
 
 .footer{background:#101923;color:#dce5ee;padding:45px 0 35px;margin-top:50px}

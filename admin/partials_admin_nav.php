@@ -54,7 +54,7 @@ $pendingCount = get_pending_booking_count();
         </a>
     </nav>
     <div class="admin-sidebar-footer">
-        <a href="../logout.php" class="admin-nav-item">
+        <a href="../logout.php" class="admin-nav-item logout-link">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
         </a>

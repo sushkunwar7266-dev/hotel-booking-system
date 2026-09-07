@@ -600,3 +600,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+// Logout confirmation handler
+document.addEventListener('DOMContentLoaded', function() {
+    const logoutLinks = document.querySelectorAll('.logout-link');
+    
+    logoutLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const logoutUrl = this.getAttribute('href');
+            
+            // Check if ConfirmModal exists (for pages that have it)
+            if (typeof ConfirmModal !== 'undefined') {
+                ConfirmModal.show('Are you sure you want to logout?', () => {
+                    window.location.href = logoutUrl;
+                });
+            } else {
+                // Fallback to browser confirm
+                if (confirm('Are you sure you want to logout?')) {
+                    window.location.href = logoutUrl;
+                }
+            }
+        });
+    });
+});

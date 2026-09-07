@@ -20,9 +20,28 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         $paymentStatus = $_POST['payment_status'];
         $allowedPayment = ['pending', 'paid', 'failed', 'refunded'];
         if(in_array($paymentStatus, $allowedPayment, true)) {
-            $s = db()->prepare("UPDATE payments SET status=?, paid_at=? WHERE booking_id=?");
-            $paidAt = $paymentStatus === 'paid' ? date('Y-m-d H:i:s') : null;
-            $s->execute([$paymentStatus, $paidAt, $id]);
+            // Check if payment record exists
+            $checkStmt = db()->prepare("SELECT id FROM payments WHERE booking_id=?");
+            $checkStmt->execute([$id]);
+            $paymentExists = $checkStmt->fetch();
+            
+            if($paymentExists) {
+                // Update existing payment
+                $paidAt = $paymentStatus === 'paid' ? date('Y-m-d H:i:s') : null;
+                $s = db()->prepare("UPDATE payments SET status=?, paid_at=? WHERE booking_id=?");
+                $s->execute([$paymentStatus, $paidAt, $id]);
+            } else {
+                // Create new payment record
+                $bookingStmt = db()->prepare("SELECT total_amount FROM bookings WHERE id=?");
+                $bookingStmt->execute([$id]);
+                $booking = $bookingStmt->fetch();
+                
+                if($booking) {
+                    $paidAt = $paymentStatus === 'paid' ? date('Y-m-d H:i:s') : null;
+                    $insertStmt = db()->prepare("INSERT INTO payments (booking_id, amount, status, method, paid_at, created_at) VALUES (?, ?, ?, 'cash', ?, NOW())");
+                    $insertStmt->execute([$id, $booking['total_amount'], $paymentStatus, $paidAt]);
+                }
+            }
             flash('success', 'Payment status updated successfully');
         }
     }
