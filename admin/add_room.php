@@ -218,15 +218,8 @@ $types = $types->fetchAll();
 $newTypeId = isset($_GET['new_type_id']) ? (int)$_GET['new_type_id'] : 0;
 
 require '../partials_header.php';
+require 'partials_admin_nav.php';
 ?>
-<div class="admin-nav">
-<div class="container">
-<a href="index.php"><i class="fas fa-chart-line"></i> Dashboard</a>
-<a href="rooms.php"><i class="fas fa-bed"></i> Rooms</a>
-<a href="room_types.php"><i class="fas fa-layer-group"></i> Room Types</a>
-<a href="bookings.php"><i class="fas fa-calendar-check"></i> Bookings</a>
-</div>
-</div>
 
 <div class="page" style="background:#f6f8fb">
 <div class="container">

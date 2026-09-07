@@ -89,7 +89,12 @@ require 'partials_header.php'; ?>
 <div class="room-info-panel">
 <div class="room-header">
 <div>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
 <span class="room-badge">Room <?=e($room['room_number'])?></span>
+<span class="room-badge" style="background:#e8f5e9;color:#2e7d32">
+<i class="fas fa-users"></i> <?=$roomCapacity?> Guests
+</span>
+</div>
 <h1 class="room-title"><?=e($room['type_name'])?></h1>
 </div>
 <div class="room-price-large">
@@ -105,10 +110,6 @@ require 'partials_header.php'; ?>
 <div class="room-amenities">
 <h3 style="margin:0 0 16px;font-size:18px;color:var(--dark)"><i class="fas fa-check-circle" style="color:var(--accent);margin-right:8px"></i>Amenities</h3>
 <div class="amenity-grid">
-<div class="amenity-item">
-<i class="fas fa-users"></i>
-<span>Up to <?=$roomCapacity?> guests</span>
-</div>
 <?php 
 if(!empty($room['amenities'])) {
     foreach(explode(',', $room['amenities']) as $a): 
@@ -122,7 +123,7 @@ if(!empty($room['amenities'])) {
 <?php 
     endforeach;
 } else {
-    echo '<p class="muted" style="margin:0;grid-column:1/-1">No additional amenities specified</p>';
+    echo '<p class="muted" style="margin:0;grid-column:1/-1">No amenities specified</p>';
 }
 ?>
 </div>

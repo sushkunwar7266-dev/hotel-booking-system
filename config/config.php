@@ -222,6 +222,12 @@ function nights(string $checkin, string $checkout): int {
     return max(0, (int)$a->diff($b)->days);
 }
 
+function get_pending_booking_count(): int {
+    $stmt = db()->prepare("SELECT COUNT(*) FROM bookings WHERE status = 'pending'");
+    $stmt->execute();
+    return (int)$stmt->fetchColumn();
+}
+
 function is_room_available(int $roomId, string $checkin, string $checkout, ?int $ignoreBookingId = null): bool {
     // First check if room itself is available (not unavailable or in maintenance)
     $roomCheck = db()->prepare("SELECT status FROM rooms WHERE id = ?");
