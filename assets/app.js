@@ -213,3 +213,112 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+
+// Toast Notification System
+const Toast = {
+    container: null,
+    
+    init() {
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.className = 'toast-container';
+            document.body.appendChild(this.container);
+        }
+    },
+    
+    show(message, type = 'info', duration = 5000) {
+        this.init();
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        // Determine icon based on type
+        const icons = {
+            success: 'fa-check-circle',
+            error: 'fa-times-circle',
+            danger: 'fa-exclamation-circle',
+            warning: 'fa-exclamation-triangle',
+            info: 'fa-info-circle'
+        };
+        
+        const titles = {
+            success: 'Success',
+            error: 'Error',
+            danger: 'Error',
+            warning: 'Warning',
+            info: 'Information'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas ${icons[type] || icons.info}"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${titles[type] || titles.info}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+            <button class="toast-close" onclick="Toast.dismiss(this)">
+                <i class="fas fa-times"></i>
+            </button>
+            ${duration > 0 ? '<div class="toast-progress"><div class="toast-progress-bar"></div></div>' : ''}
+        `;
+        
+        this.container.appendChild(toast);
+        
+        // Auto dismiss after duration
+        if (duration > 0) {
+            setTimeout(() => {
+                this.dismiss(toast);
+            }, duration);
+        }
+        
+        return toast;
+    },
+    
+    dismiss(element) {
+        const toast = element.classList && element.classList.contains('toast') 
+            ? element 
+            : element.closest('.toast');
+            
+        if (toast) {
+            toast.classList.add('hiding');
+            setTimeout(() => {
+                toast.remove();
+                // Remove container if empty
+                if (this.container && this.container.children.length === 0) {
+                    this.container.remove();
+                    this.container = null;
+                }
+            }, 300);
+        }
+    },
+    
+    success(message, duration = 5000) {
+        return this.show(message, 'success', duration);
+    },
+    
+    error(message, duration = 7000) {
+        return this.show(message, 'error', duration);
+    },
+    
+    warning(message, duration = 6000) {
+        return this.show(message, 'warning', duration);
+    },
+    
+    info(message, duration = 5000) {
+        return this.show(message, 'info', duration);
+    }
+};
+
+// Auto-show toast from PHP flash messages
+document.addEventListener('DOMContentLoaded', function() {
+    const flashData = document.getElementById('flash-data');
+    if (flashData) {
+        const type = flashData.dataset.type;
+        const message = flashData.dataset.message;
+        if (message) {
+            Toast.show(message, type);
+        }
+    }
+});
