@@ -322,3 +322,281 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+
+// Confirmation Modal System
+const ConfirmModal = {
+    show(options = {}) {
+        return new Promise((resolve) => {
+            const {
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                type = 'danger', // danger, warning, info
+                icon = type === 'danger' ? 'fa-exclamation-triangle' : 
+                       type === 'warning' ? 'fa-exclamation-circle' : 'fa-info-circle'
+            } = options;
+            
+            // Create overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-modal-overlay';
+            
+            // Create modal
+            overlay.innerHTML = `
+                <div class="confirm-modal">
+                    <div class="confirm-modal-header">
+                        <div class="confirm-modal-icon ${type}">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="confirm-modal-content">
+                            <h3 class="confirm-modal-title">${title}</h3>
+                            <p class="confirm-modal-message">${message}</p>
+                        </div>
+                    </div>
+                    <div class="confirm-modal-footer">
+                        <button class="btn btn-cancel" data-action="cancel">${cancelText}</button>
+                        <button class="btn btn-confirm ${type}" data-action="confirm">${confirmText}</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            // Focus on confirm button
+            setTimeout(() => {
+                overlay.querySelector('.btn-confirm').focus();
+            }, 100);
+            
+            // Handle button clicks
+            const handleClick = (confirmed) => {
+                overlay.classList.add('hiding');
+                setTimeout(() => {
+                    overlay.remove();
+                    resolve(confirmed);
+                }, 200);
+            };
+            
+            overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => handleClick(false));
+            overlay.querySelector('[data-action="confirm"]').addEventListener('click', () => handleClick(true));
+            
+            // Close on overlay click
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    handleClick(false);
+                }
+            });
+            
+            // Handle keyboard
+            const handleKeyboard = (e) => {
+                if (e.key === 'Escape') {
+                    handleClick(false);
+                } else if (e.key === 'Enter') {
+                    handleClick(true);
+                }
+            };
+            
+            document.addEventListener('keydown', handleKeyboard);
+            
+            // Cleanup keyboard listener
+            overlay.addEventListener('click', () => {
+                document.removeEventListener('keydown', handleKeyboard);
+            });
+        });
+    },
+    
+    delete(itemName, message = null) {
+        return this.show({
+            title: 'Delete Confirmation',
+            message: message || `Are you sure you want to delete "${itemName}"?\n\nThis action cannot be undone.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            type: 'danger',
+            icon: 'fa-trash'
+        });
+    },
+    
+    warning(title, message) {
+        return this.show({
+            title: title,
+            message: message,
+            confirmText: 'Proceed',
+            cancelText: 'Cancel',
+            type: 'warning'
+        });
+    },
+    
+    info(title, message) {
+        return this.show({
+            title: title,
+            message: message,
+            confirmText: 'OK',
+            cancelText: 'Cancel',
+            type: 'info'
+        });
+    }
+};
+
+// Replace all confirm() calls with custom modal
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle all forms with onsubmit confirm
+    document.querySelectorAll('form[onsubmit]').forEach(form => {
+        const originalOnsubmit = form.getAttribute('onsubmit');
+        
+        // Check if it uses confirm()
+        if (originalOnsubmit && originalOnsubmit.includes('confirm(')) {
+            form.removeAttribute('onsubmit');
+            
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Extract message from confirm() call
+                const match = originalOnsubmit.match(/confirm\(['"](.*?)['"]\)/);
+                let message = 'Are you sure you want to proceed?';
+                
+                if (match && match[1]) {
+                    message = match[1].replace(/\\n/g, '\n');
+                }
+                
+                // Determine if it's a delete action
+                const isDelete = form.querySelector('input[name="action"][value="delete"]') ||
+                                originalOnsubmit.toLowerCase().includes('delete');
+                
+                let confirmed;
+                if (isDelete) {
+                    // Extract item name if available
+                    const itemNameMatch = message.match(/delete.*?[:"](.*?)["\n]/i);
+                    const itemName = itemNameMatch ? itemNameMatch[1].trim() : 'this item';
+                    
+                    confirmed = await ConfirmModal.delete(itemName, message);
+                } else {
+                    confirmed = await ConfirmModal.show({
+                        title: 'Confirm Action',
+                        message: message,
+                        confirmText: 'Confirm',
+                        cancelText: 'Cancel',
+                        type: 'warning'
+                    });
+                }
+                
+                if (confirmed) {
+                    form.submit();
+                }
+            });
+        }
+    });
+    
+    // Handle inline onclick confirm calls
+    document.querySelectorAll('[onclick*="confirm("]').forEach(element => {
+        const originalOnclick = element.getAttribute('onclick');
+        element.removeAttribute('onclick');
+        
+        element.addEventListener('click', async function(e) {
+            e.preventDefault();
+            
+            // Extract confirm message
+            const match = originalOnclick.match(/confirm\(['"](.*?)['"]\)/);
+            const message = match && match[1] ? match[1].replace(/\\n/g, '\n') : 'Are you sure?';
+            
+            // Check if it's a form submit or status change
+            const isFormSubmit = originalOnclick.includes('this.form.submit()');
+            const isStatusChange = originalOnclick.includes('status');
+            
+            let confirmed;
+            if (isStatusChange) {
+                const statusValue = this.closest('form')?.querySelector('select[name="status"]')?.value;
+                confirmed = await ConfirmModal.show({
+                    title: 'Change Status',
+                    message: message,
+                    confirmText: 'Change',
+                    cancelText: 'Cancel',
+                    type: 'warning'
+                });
+            } else {
+                confirmed = await ConfirmModal.show({
+                    title: 'Confirm Action',
+                    message: message,
+                    confirmText: 'Confirm',
+                    cancelText: 'Cancel',
+                    type: 'info'
+                });
+            }
+            
+            if (confirmed) {
+                if (isFormSubmit) {
+                    this.form.submit();
+                } else {
+                    // Execute the original onclick minus the confirm part
+                    const codeToExecute = originalOnclick.replace(/if\s*\(\s*confirm\([^)]+\)\s*\)\s*/gi, '');
+                    eval(codeToExecute);
+                }
+            }
+        });
+    });
+});
+
+
+// Admin Sidebar Active State and Toggle
+document.addEventListener('DOMContentLoaded', function() {
+    // Set active state for admin sidebar
+    const currentPath = window.location.pathname;
+    const navItems = document.querySelectorAll('.admin-nav-item');
+    
+    navItems.forEach(item => {
+        const href = item.getAttribute('href');
+        if (href && currentPath.includes(href)) {
+            item.classList.add('active');
+        }
+    });
+    
+    // Desktop sidebar toggle
+    const desktopToggle = document.querySelector('.admin-sidebar-toggle');
+    const sidebar = document.querySelector('.admin-sidebar');
+    
+    if (desktopToggle && sidebar) {
+        // Check localStorage for saved state
+        const sidebarState = localStorage.getItem('adminSidebarCollapsed');
+        if (sidebarState === 'true') {
+            sidebar.classList.add('collapsed');
+            desktopToggle.querySelector('i').classList.replace('fa-chevron-right', 'fa-chevron-left');
+        }
+        
+        desktopToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('collapsed');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            
+            // Update icon
+            const icon = this.querySelector('i');
+            if (isCollapsed) {
+                // When collapsed, show < (chevron-left) to indicate expand action
+                icon.classList.replace('fa-chevron-right', 'fa-chevron-left');
+            } else {
+                // When expanded, show > (chevron-right) to indicate collapse action
+                icon.classList.replace('fa-chevron-left', 'fa-chevron-right');
+            }
+            
+            // Save state to localStorage
+            localStorage.setItem('adminSidebarCollapsed', isCollapsed);
+        });
+    }
+    
+    // Mobile sidebar toggle
+    const mobileToggle = document.querySelector('.admin-mobile-toggle');
+    const overlay = document.querySelector('.admin-sidebar-overlay');
+    
+    if (mobileToggle && sidebar) {
+        mobileToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('open');
+            if (overlay) {
+                overlay.classList.toggle('active');
+            }
+        });
+        
+        if (overlay) {
+            overlay.addEventListener('click', function() {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('active');
+            });
+        }
+    }
+});

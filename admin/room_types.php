@@ -54,9 +54,75 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('room_types.php');
 }
 
+// Get filters from URL
+$search = $_GET['search'] ?? '';
+$statusFilter = $_GET['status'] ?? '';
+$sortBy = $_GET['sort'] ?? 'name_asc';
+
+// Pagination
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 10;
+$offset = ($page - 1) * $perPage;
+
+// Build query with filters
+$sql = "SELECT rt.*, COUNT(r.id) as room_count 
+        FROM room_types rt 
+        LEFT JOIN rooms r ON r.room_type_id=rt.id 
+        WHERE 1=1";
+
+$params = [];
+
+if($search !== '') {
+    $sql .= " AND (rt.name LIKE ? OR rt.description LIKE ?)";
+    $searchParam = "%$search%";
+    $params = array_merge($params, [$searchParam, $searchParam]);
+}
+
+if($statusFilter !== '') {
+    $sql .= " AND rt.status = ?";
+    $params[] = $statusFilter;
+}
+
+$sql .= " GROUP BY rt.id";
+
+// Get total count for pagination
+$countSql = "SELECT COUNT(*) FROM room_types WHERE 1=1";
+$countParams = [];
+if($search !== '') {
+    $countSql .= " AND (name LIKE ? OR description LIKE ?)";
+    $countParams = [$searchParam, $searchParam];
+}
+if($statusFilter !== '') {
+    $countSql .= " AND status = ?";
+    $countParams[] = $statusFilter;
+}
+$countStmt = db()->prepare($countSql);
+$countStmt->execute($countParams);
+$totalTypes = (int)$countStmt->fetchColumn();
+$totalPages = ceil($totalTypes / $perPage);
+
+// Add sorting
+switch($sortBy) {
+    case 'name_desc':
+        $sql .= " ORDER BY rt.name DESC";
+        break;
+    case 'rooms_desc':
+        $sql .= " ORDER BY room_count DESC";
+        break;
+    case 'status':
+        $sql .= " ORDER BY rt.status ASC, rt.name ASC";
+        break;
+    case 'name_asc':
+    default:
+        $sql .= " ORDER BY rt.name ASC";
+        break;
+}
+
+$sql .= " LIMIT $perPage OFFSET $offset";
+
 // Get all room types with room count
-$stmt = db()->prepare("SELECT rt.*, COUNT(r.id) as room_count FROM room_types rt LEFT JOIN rooms r ON r.room_type_id=rt.id GROUP BY rt.id ORDER BY rt.name");
-$stmt->execute();
+$stmt = db()->prepare($sql);
+$stmt->execute($params);
 $types = $stmt->fetchAll();
 
 require '../partials_header.php';
@@ -66,24 +132,81 @@ require 'partials_admin_nav.php';
 <div class="page" style="background:#f6f8fb">
 <div class="container">
 <div style="margin-bottom:32px">
-<div style="display:flex;align-items:center;justify-content:space-between">
-<div>
 <h1 style="margin:0 0 8px">Room Type Management</h1>
 <p class="muted">Manage room categories and their details</p>
 </div>
-<button onclick="openAddModal()" class="btn orange" style="display:inline-flex;align-items:center;gap:8px">
-<i class="fas fa-plus"></i> Add New Room Type
+
+<!-- Search & Filter Panel -->
+<div class="panel" style="margin-bottom:24px">
+<form method="get" action="room_types.php">
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:12px;align-items:end">
+<div>
+<label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px;color:var(--dark)">
+<i class="fas fa-search"></i> Search
+</label>
+<input type="text" name="search" value="<?=e($search)?>" placeholder="Name or description..." style="width:100%;padding:10px 14px;border:1px solid #d9dee7;border-radius:6px;font-size:14px">
+</div>
+<div>
+<label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px;color:var(--dark)">
+<i class="fas fa-toggle-on"></i> Status
+</label>
+<select name="status" style="width:100%;padding:10px 14px;border:1px solid #d9dee7;border-radius:6px;font-size:14px">
+<option value="">All Status</option>
+<option value="active" <?=$statusFilter==='active'?'selected':''?>>Active</option>
+<option value="inactive" <?=$statusFilter==='inactive'?'selected':''?>>Inactive</option>
+</select>
+</div>
+<div>
+<label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px;color:var(--dark)">
+<i class="fas fa-sort"></i> Sort By
+</label>
+<select name="sort" style="width:100%;padding:10px 14px;border:1px solid #d9dee7;border-radius:6px;font-size:14px">
+<option value="name_asc" <?=$sortBy==='name_asc'?'selected':''?>>Name (A-Z)</option>
+<option value="name_desc" <?=$sortBy==='name_desc'?'selected':''?>>Name (Z-A)</option>
+<option value="rooms_desc" <?=$sortBy==='rooms_desc'?'selected':''?>>Most Rooms</option>
+<option value="status" <?=$sortBy==='status'?'selected':''?>>Status</option>
+</select>
+</div>
+<div style="display:flex;gap:8px">
+<button type="submit" class="btn orange" style="padding:10px 20px;white-space:nowrap;height:44px;display:inline-flex;align-items:center;gap:8px">
+<i class="fas fa-filter"></i> Filter
 </button>
+<?php if($search || $statusFilter || $sortBy !== 'name_asc'): ?>
+<a href="room_types.php" class="btn light" style="padding:10px 16px;white-space:nowrap;height:44px;display:inline-flex;align-items:center;justify-content:center" title="Clear filters">
+<i class="fas fa-times"></i>
+</a>
+<?php endif; ?>
 </div>
 </div>
+</form>
+</div>
+
+<?php if($search || $statusFilter): ?>
+<div style="margin-bottom:16px;padding:12px 16px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:8px;font-size:14px">
+<i class="fas fa-info-circle" style="color:#856404"></i>
+<span style="color:#856404"><strong><?=count($types)?></strong> room type(s) found with applied filters</span>
+</div>
+</div>
+<?php endif; ?>
 
 <div class="panel">
 <?php if(count($types) === 0): ?>
 <div style="text-align:center;padding:60px 20px">
 <i class="fas fa-layer-group" style="font-size:64px;color:#d9dee7;margin-bottom:20px"></i>
-<h3 style="color:var(--muted);margin:0 0 12px">No room types yet</h3>
-<p class="muted" style="margin-bottom:24px">Create your first room type to get started</p>
+<h3 style="color:var(--muted);margin:0 0 12px">No room types found</h3>
+<p class="muted" style="margin-bottom:24px">
+<?php if($search || $statusFilter): ?>
+Try adjusting your search or filter criteria
+<?php else: ?>
+Create your first room type to get started
+<?php endif; ?>
+</p>
+<?php if($search || $statusFilter): ?>
+<a href="room_types.php" class="btn light"><i class="fas fa-redo"></i> Clear Filters</a>
+<?php else: ?>
 <button onclick="openAddModal()" class="btn orange"><i class="fas fa-plus" style="margin-right:8px"></i>Add Room Type</button>
+<?php endif; ?>
 </div>
 <?php else: ?>
 <div class="table-wrap">
@@ -129,7 +252,7 @@ require 'partials_admin_nav.php';
 </span>
 </td>
 <td>
-<div style="display:flex;gap:8px;justify-content:center">
+<div style="display:flex;gap:8px;align-items:center;justify-content:center">
 <form method="post" style="margin:0;display:inline-block">
 <input type="hidden" name="csrf" value="<?=csrf_token()?>">
 <input type="hidden" name="action" value="toggle_status">
@@ -160,8 +283,72 @@ require 'partials_admin_nav.php';
 <?php endif; ?>
 </div>
 
+<?php if($totalPages > 1): ?>
+<!-- Pagination -->
+<div style="margin-top:24px;display:flex;justify-content:center;align-items:center;gap:8px">
+<?php
+$queryParams = $_GET;
+unset($queryParams['page']);
+$baseUrl = 'room_types.php?' . http_build_query($queryParams);
+$separator = $queryParams ? '&' : '';
+?>
+
+<?php if($page > 1): ?>
+<a href="<?=$baseUrl . $separator?>page=1" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-double-left"></i>
+</a>
+<a href="<?=$baseUrl . $separator?>page=<?=$page-1?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-left"></i>
+</a>
+<?php else: ?>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-double-left"></i>
+</button>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-left"></i>
+</button>
+<?php endif; ?>
+
+<?php
+$startPage = max(1, $page - 2);
+$endPage = min($totalPages, $page + 2);
+
+for($i = $startPage; $i <= $endPage; $i++):
+?>
+<a href="<?=$baseUrl . $separator?>page=<?=$i?>" class="btn small <?=$i === $page ? 'orange' : 'light'?>" style="min-width:40px">
+<?=$i?>
+</a>
+<?php endfor; ?>
+
+<?php if($page < $totalPages): ?>
+<a href="<?=$baseUrl . $separator?>page=<?=$page+1?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-right"></i>
+</a>
+<a href="<?=$baseUrl . $separator?>page=<?=$totalPages?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-double-right"></i>
+</a>
+<?php else: ?>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-right"></i>
+</button>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-double-right"></i>
+</button>
+<?php endif; ?>
+
+<span style="margin-left:16px;color:var(--muted);font-size:14px">
+Page <?=$page?> of <?=$totalPages?> (<?=$totalTypes?> total)
+</span>
+</div>
+<?php endif; ?>
+
 </div>
 </div>
+
+<!-- Floating Action Button -->
+<button onclick="openAddModal()" class="fab-button" title="Add Room Type">
+<i class="fas fa-plus"></i>
+</button>
 
 <!-- Add/Edit Room Type Modal -->
 <div id="roomTypeModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
@@ -261,4 +448,4 @@ document.getElementById('roomTypeModal').addEventListener('click', function(e) {
 });
 </script>
 
-<?php require '../partials_footer.php'; ?>
+<?php require 'partials_admin_footer.php'; ?>

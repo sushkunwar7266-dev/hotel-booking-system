@@ -257,8 +257,6 @@ Room Number <span style="color:var(--danger)">*</span>
 <small class="muted">Alphanumeric only, max 10 characters</small>
 </div>
 <div>
-<div style="display:flex;gap:8px;align-items:end">
-<div style="flex:1">
 <label style="display:block;margin-bottom:8px;font-weight:600;color:var(--dark)">
 Room Type <span style="color:var(--danger)">*</span>
 </label>
@@ -270,11 +268,6 @@ Room Type <span style="color:var(--danger)">*</span>
 <option value="add_new" style="font-weight:700;color:var(--accent)">+ Add New Room Type</option>
 </select>
 <small class="muted">Select the room category</small>
-</div>
-<button type="button" id="editTypeBtn" onclick="openEditRoomTypeModal()" style="display:none;padding:12px 16px;height:48px;background:#0066cc;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;white-space:nowrap">
-<i class="fas fa-edit"></i> Edit Type
-</button>
-</div>
 </div>
 <div>
 <label style="display:block;margin-bottom:8px;font-weight:600;color:var(--dark)">
@@ -483,10 +476,6 @@ function addGalleryInput() {
 // Room Type Modal Functions
 const roomTypes = <?=json_encode($types)?>;
 
-function openEditRoomTypeModal() {
-    openRoomTypeModal(true);
-}
-
 function openRoomTypeModal(isEdit = false) {
     const modal = document.getElementById('addRoomTypeModal');
     const title = document.getElementById('roomTypeModalTitle');
@@ -555,28 +544,13 @@ function closeRoomTypeModal() {
 // Handle room type dropdown change
 document.addEventListener('DOMContentLoaded', function() {
     const roomTypeSelect = document.getElementById('roomTypeSelect');
-    const editBtn = document.getElementById('editTypeBtn');
-    
-    function updateEditButton() {
-        const selectedValue = roomTypeSelect.value;
-        if(selectedValue && selectedValue !== 'add_new' && selectedValue !== '') {
-            editBtn.style.display = 'block';
-        } else {
-            editBtn.style.display = 'none';
-        }
-    }
     
     roomTypeSelect.addEventListener('change', function() {
         if(this.value === 'add_new') {
             openRoomTypeModal(false);
             this.value = ''; // Reset dropdown after opening modal
-        } else {
-            updateEditButton();
         }
     });
-    
-    // Initial check
-    updateEditButton();
     
     // Close modal on outside click
     document.getElementById('addRoomTypeModal').addEventListener('click', function(e) {
@@ -587,4 +561,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<?php require '../partials_footer.php'; ?>
+<?php require 'partials_admin_footer.php'; ?>

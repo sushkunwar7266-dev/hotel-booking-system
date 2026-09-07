@@ -85,6 +85,9 @@ $typeFilter = $_GET['type'] ?? '';
 $statusFilter = $_GET['status'] ?? '';
 $priceMin = $_GET['price_min'] ?? '';
 $priceMax = $_GET['price_max'] ?? '';
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 10;
+$offset = ($page - 1) * $perPage;
 
 // Build query with filters
 $sql = "SELECT r.*,rt.name type_name 
@@ -120,7 +123,14 @@ if($priceMax !== '') {
     $params[] = (float)$priceMax;
 }
 
-$sql .= " ORDER BY r.room_number";
+// Get total count for pagination
+$countSql = "SELECT COUNT(*) FROM rooms r JOIN room_types rt ON rt.id=r.room_type_id WHERE 1=1" . substr($sql, strpos($sql, 'WHERE 1=1') + 9, strpos($sql, 'ORDER BY') ? strpos($sql, 'ORDER BY') - strpos($sql, 'WHERE 1=1') - 9 : strlen($sql));
+$countStmt = db()->prepare(str_replace(['r.*,rt.name type_name', 'FROM rooms r JOIN room_types rt ON rt.id=r.room_type_id'], ['COUNT(*)', 'FROM rooms r JOIN room_types rt ON rt.id=r.room_type_id'], $sql));
+$countStmt->execute($params);
+$totalRooms = (int)$countStmt->fetchColumn();
+$totalPages = ceil($totalRooms / $perPage);
+
+$sql .= " ORDER BY r.room_number LIMIT $perPage OFFSET $offset";
 
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
@@ -137,15 +147,8 @@ require 'partials_admin_nav.php';
 <div class="page" style="background:#f6f8fb">
 <div class="container">
 <div style="margin-bottom:32px">
-<div style="display:flex;align-items:center;justify-content:space-between">
-<div>
 <h1 style="margin:0 0 8px">Room Inventory</h1>
 <p class="muted">Manage rooms and availability status</p>
-</div>
-<a href="add_room.php" class="btn orange" style="display:inline-flex;align-items:center;gap:8px">
-<i class="fas fa-plus"></i> Add New Room
-</a>
-</div>
 </div>
 
 <!-- Search & Filter Panel -->
@@ -289,6 +292,71 @@ require 'partials_admin_nav.php';
 <?php endif; ?>
 </div>
 
+<?php if($totalPages > 1): ?>
+<!-- Pagination -->
+<div style="margin-top:24px;display:flex;justify-content:center;align-items:center;gap:8px">
+<?php
+$queryParams = $_GET;
+unset($queryParams['page']);
+$baseUrl = 'rooms.php?' . http_build_query($queryParams);
+$separator = $queryParams ? '&' : '';
+?>
+
+<?php if($page > 1): ?>
+<a href="<?=$baseUrl . $separator?>page=1" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-double-left"></i>
+</a>
+<a href="<?=$baseUrl . $separator?>page=<?=$page-1?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-left"></i>
+</a>
+<?php else: ?>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-double-left"></i>
+</button>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-left"></i>
+</button>
+<?php endif; ?>
+
+<?php
+$startPage = max(1, $page - 2);
+$endPage = min($totalPages, $page + 2);
+
+for($i = $startPage; $i <= $endPage; $i++):
+?>
+<a href="<?=$baseUrl . $separator?>page=<?=$i?>" class="btn small <?=$i === $page ? 'orange' : 'light'?>" style="min-width:40px">
+<?=$i?>
+</a>
+<?php endfor; ?>
+
+<?php if($page < $totalPages): ?>
+<a href="<?=$baseUrl . $separator?>page=<?=$page+1?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-right"></i>
+</a>
+<a href="<?=$baseUrl . $separator?>page=<?=$totalPages?>" class="btn light small" style="display:inline-flex;align-items:center">
+<i class="fas fa-angle-double-right"></i>
+</a>
+<?php else: ?>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-right"></i>
+</button>
+<button class="btn light small" disabled style="display:inline-flex;align-items:center;opacity:0.5">
+<i class="fas fa-angle-double-right"></i>
+</button>
+<?php endif; ?>
+
+<span style="margin-left:16px;color:var(--muted);font-size:14px">
+Page <?=$page?> of <?=$totalPages?> (<?=$totalRooms?> total)
+</span>
+</div>
+<?php endif; ?>
+
 </div>
 </div>
-<?php require '../partials_footer.php'; ?>
+
+<!-- Floating Action Button -->
+<a href="add_room.php" class="fab-button" title="Add New Room">
+<i class="fas fa-plus"></i>
+</a>
+
+<?php require 'partials_admin_footer.php'; ?>

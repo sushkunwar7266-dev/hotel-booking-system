@@ -284,4 +284,4 @@ function showDetails<?=$b['id']?>() {
 
 </div>
 </div>
-<?php require '../partials_footer.php'; ?>
+<?php require 'partials_admin_footer.php'; ?>
