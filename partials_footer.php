@@ -8,11 +8,11 @@
 <div>
 <h4 style="margin:0 0 16px;color:#fff;font-size:16px">Quick Links</h4>
 <div style="display:flex;flex-direction:column;gap:10px">
-<a href="index.php" style="color:#dce5ee;transition:color 0.2s">Home</a>
-<a href="rooms.php" style="color:#dce5ee;transition:color 0.2s">Rooms</a>
-<a href="my_bookings.php" style="color:#dce5ee;transition:color 0.2s">My Bookings</a>
-<a href="login.php" style="color:#dce5ee;transition:color 0.2s">Login</a>
-<a href="register.php" style="color:#dce5ee;transition:color 0.2s">Register</a>
+<a href="/hotel/index.php" style="color:#dce5ee;transition:color 0.2s">Home</a>
+<a href="/hotel/rooms.php" style="color:#dce5ee;transition:color 0.2s">Rooms</a>
+<a href="/hotel/my_bookings.php" style="color:#dce5ee;transition:color 0.2s">My Bookings</a>
+<a href="/hotel/login.php" style="color:#dce5ee;transition:color 0.2s">Login</a>
+<a href="/hotel/register.php" style="color:#dce5ee;transition:color 0.2s">Register</a>
 </div>
 </div>
 <div>

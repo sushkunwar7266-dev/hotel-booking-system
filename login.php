@@ -39,7 +39,10 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
         $s->execute([$email]);
         $u = $s->fetch();
         
-        if($u && password_verify($pass, $u['password'])) {
+        if($u && password_verify($pass, $u['password']) && ($u['status'] ?? 'active') === 'inactive') {
+            flash('error', 'Your account has been deactivated. Please contact the hotel.');
+            redirect('login.php');
+        } elseif($u && password_verify($pass, $u['password'])) {
             // Successful login - reset rate limit
             reset_rate_limit('login', $rate_limit_id);
             session_regenerate_id(true);

@@ -38,10 +38,9 @@ if($guests > $roomCapacity) {
     $guests = $roomCapacity;
 }
 
-if(!is_room_available($id, $in, $out)) {
-    flash('error', 'This room is not available for the selected dates');
-    redirect('rooms.php');
-}
+// Show availability on the page instead of redirecting away
+$roomOpen = $room['status'] === 'available';
+$available = $roomOpen && is_room_available($id, $in, $out);
 
 $n = nights($in, $out);
 $total = $n * (float)$room['price'];
@@ -133,10 +132,22 @@ if(!empty($room['amenities'])) {
 
 <div class="room-detail-right">
 <div class="booking-card">
-<h3 style="margin:0 0 20px;font-size:20px">Complete your booking</h3>
+<h3 style="margin:0 0 20px;font-size:20px">Reserve this room</h3>
+<?php if(!$roomOpen): ?>
+<div class="avail-box" style="display:flex;gap:10px;align-items:flex-start;background:#fdeaea;color:#b42318;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:14px">
+<i class="fas fa-tools" style="margin-top:3px"></i><span><strong>Currently unavailable.</strong> This room is under <?=e($room['status'])?> and cannot be booked right now.</span>
+</div>
+<?php elseif($available): ?>
+<div class="avail-box" style="display:flex;gap:10px;align-items:flex-start;background:#e6f6ec;color:#1e7b3c;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:14px">
+<i class="fas fa-check-circle" style="margin-top:3px"></i><span><strong>Available</strong> for <?=date('M j', strtotime($in))?> to <?=date('M j, Y', strtotime($out))?>.</span>
+</div>
+<?php else: ?>
+<div class="avail-box" style="display:flex;gap:10px;align-items:flex-start;background:#fff4e0;color:#b26a00;border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:14px">
+<i class="fas fa-calendar-times" style="margin-top:3px"></i><span><strong>Booked</strong> for <?=date('M j', strtotime($in))?> to <?=date('M j, Y', strtotime($out))?>. Try different dates or <a href="rooms.php?check_in=<?=urlencode($in)?>&check_out=<?=urlencode($out)?>&guests=<?=$guests?>" style="color:inherit;font-weight:700">see other available rooms</a>.</span>
+</div>
+<?php endif; ?>
 
-<form action="book.php" method="post" novalidate id="bookingForm">
-<input type="hidden" name="csrf" value="<?=csrf_token()?>">
+<form action="checkout.php" method="get" novalidate id="bookingForm">
 <input type="hidden" name="room_id" value="<?=$id?>">
 
 <div class="booking-summary" style="margin-bottom:24px">
@@ -164,30 +175,6 @@ if(!empty($room['amenities'])) {
 <div class="form-hint">Maximum <?=$roomCapacity?> guests</div>
 </div>
 
-<h4 style="margin:24px 0 16px;font-size:16px;font-weight:700;color:var(--dark)"><i class="fas fa-user" style="color:var(--accent);margin-right:8px"></i>Contact Information</h4>
-
-<div class="form-group">
-<label>Full Name</label>
-<input type="text" name="contact_name" value="<?=e($user['name'])?>" required maxlength="120" style="width:100%;padding:12px;border:1px solid #d9dee7;border-radius:9px">
-</div>
-
-<div class="form-group">
-<label>Email</label>
-<input type="email" name="contact_email" value="<?=e($user['email'])?>" required maxlength="190" style="width:100%;padding:12px;border:1px solid #d9dee7;border-radius:9px">
-</div>
-
-<div class="form-group">
-<label>Phone Number</label>
-<input type="tel" name="contact_phone" value="<?=e($user['phone'] ?? '')?>" required pattern="[0-9]{10}" maxlength="10" placeholder="9800000000" style="width:100%;padding:12px;border:1px solid #d9dee7;border-radius:9px">
-<div class="form-hint">10 digit number</div>
-</div>
-
-<div class="form-group">
-<label>Special requests <span style="font-weight:400;color:var(--muted)">(Optional)</span></label>
-<textarea name="special_request" placeholder="Any special requirements?" maxlength="500" rows="3" style="width:100%;padding:12px;border:1px solid #d9dee7;border-radius:9px;font-family:inherit;resize:vertical"></textarea>
-<div class="form-hint">Maximum 500 characters</div>
-</div>
-
 <div class="price-breakdown">
 <div class="price-row price-total">
 <span>Total Amount</span>
@@ -195,9 +182,16 @@ if(!empty($room['amenities'])) {
 </div>
 </div>
 
+<?php if($available): ?>
 <button type="submit" class="btn orange" style="width:100%;padding:16px;font-size:16px;font-weight:700">
-<i class="fas fa-calendar-check" style="margin-right:8px"></i>Confirm Booking
+<i class="fas fa-arrow-right" style="margin-right:8px"></i>Continue to Checkout
 </button>
+<?php else: ?>
+<button type="button" class="btn" disabled style="width:100%;padding:16px;font-size:16px;font-weight:700;background:#c5ccd6;cursor:not-allowed">
+<i class="fas fa-ban" style="margin-right:8px"></i><?=$roomOpen ? 'Not available for these dates' : 'Currently unavailable'?>
+</button>
+<?php endif; ?>
+<div class="form-hint" style="text-align:center;margin-top:8px">You won't be charged yet</div>
 </form>
 </div>
 </div>
@@ -249,6 +243,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     checkOutInput.addEventListener('change', calculateNights);
+
+    // Re-check availability for the new dates or guests
+    function recheck() {
+        if (!checkInInput.value || !checkOutInput.value || checkOutInput.value <= checkInInput.value) return;
+        const g = document.querySelector('#bookingForm [name="guests"]');
+        const box = document.querySelector('.avail-box');
+        if (box) box.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking availability...</span>';
+        location.href = 'room.php?id=<?=$id?>&check_in=' + checkInInput.value + '&check_out=' + checkOutInput.value + '&guests=' + (g ? g.value : 1);
+    }
+    checkInInput.addEventListener('change', recheck);
+    checkOutInput.addEventListener('change', recheck);
+    const guestsInput = document.querySelector('#bookingForm [name="guests"]');
+    if (guestsInput) guestsInput.addEventListener('change', recheck);
 });
 </script>
 

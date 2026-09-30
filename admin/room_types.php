@@ -65,7 +65,8 @@ $perPage = 10;
 $offset = ($page - 1) * $perPage;
 
 // Build query with filters
-$sql = "SELECT rt.*, COUNT(r.id) as room_count 
+$sql = "SELECT rt.*, COUNT(r.id) as room_count, SUM(r.status='available') as available_count,
+               MIN(r.price) as min_price, MAX(r.price) as max_price 
         FROM room_types rt 
         LEFT JOIN rooms r ON r.room_type_id=rt.id 
         WHERE 1=1";
@@ -125,10 +126,62 @@ $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $types = $stmt->fetchAll();
 
+// Counts for the status tabs
+$counts = ['' => 0];
+foreach (db()->query("SELECT status, COUNT(*) c FROM room_types GROUP BY status") as $c) { $counts[$c['status']] = (int)$c['c']; $counts[''] += (int)$c['c']; }
+$tabs = ['' => 'All Types', 'active' => 'Active', 'inactive' => 'Inactive'];
+$tabUrl = function ($st) use ($search, $sortBy) {
+    return 'room_types.php?' . http_build_query(array_filter(['status' => $st, 'search' => $search, 'sort' => $sortBy !== 'name_asc' ? $sortBy : '']));
+};
+
 require '../partials_header.php';
 require 'partials_admin_nav.php';
 ?>
 
+<style>
+.rt-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.rt-tab{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #e3e7ee;color:#475467;font-weight:600;font-size:13px;text-decoration:none;transition:.15s}
+.rt-tab span{background:#eef1f6;color:#475467;border-radius:999px;padding:1px 8px;font-size:12px}
+.rt-tab:hover{border-color:var(--primary);color:var(--primary)}
+.rt-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.rt-tab.active span{background:rgba(255,255,255,.2);color:#fff}
+.rt-panel{padding:0!important;overflow:hidden}
+.rt-scroll{overflow-x:auto}
+.rt-table{width:100%;border-collapse:separate;border-spacing:0;min-width:860px}
+.rt-table thead th{background:#f8fafc;color:#667085;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:12px 10px;border-bottom:1px solid #e6e9ef;text-align:left;white-space:nowrap}
+.rt-table td{padding:14px 10px;border-bottom:1px solid #f0f2f5;vertical-align:middle;font-size:14px}
+.rt-table th:first-child,.rt-table td:first-child{padding-left:16px}
+.rt-table th:last-child,.rt-table td:last-child{padding-right:16px}
+.rt-table tbody tr{transition:background .12s}
+.rt-table tbody tr:hover{background:#f8fafc}
+.rt-table tbody tr:last-child td{border-bottom:0}
+.rt-type{display:flex;align-items:center;gap:14px}
+.rt-thumb{position:relative;width:72px;height:54px;border-radius:9px;overflow:hidden;background:#eef1f6;flex:none;display:flex;align-items:center;justify-content:center;color:#98a2b3}
+.rt-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rt-name{font-weight:700;color:#1d2939;font-size:15px}
+.rt-desc{color:#667085;font-size:12.5px;margin-top:3px;line-height:1.4;max-width:340px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rt-sub{color:#667085;font-size:12px;white-space:nowrap}
+.rt-cap{font-size:13px;color:#344054;white-space:nowrap}
+.rt-cap i{color:#98a2b3;margin-right:4px}
+.rt-price{font-weight:700;color:#1d2939;white-space:nowrap}
+.rt-rooms{display:grid;grid-template-columns:auto;gap:4px;text-decoration:none;color:#1d2939;font-size:13px;min-width:96px}
+.rt-rooms:hover strong{color:var(--primary);text-decoration:underline}
+.rt-bar{display:block;height:5px;border-radius:99px;background:#eef1f6;overflow:hidden;width:96px}
+.rt-bar span{display:block;height:100%;background:#28a745;border-radius:99px}
+.rt-switch{display:inline-flex;align-items:center;gap:8px;border:0;background:#eef0f3;color:#4a5563;border-radius:999px;padding:4px 12px 4px 4px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
+.rt-switch .knob{width:26px;height:16px;border-radius:99px;background:#c5ccd6;position:relative;transition:.15s}
+.rt-switch .knob:after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.15s}
+.rt-switch.on{background:#e6f6ec;color:#1e7b3c}
+.rt-switch.on .knob{background:#28a745}
+.rt-switch.on .knob:after{left:12px}
+.rt-actions{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end}
+.rt-btn{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #d9dee7;background:#fff;color:#344054;font-size:13px;cursor:pointer;text-decoration:none;transition:.12s}
+.rt-btn:hover{background:#f2f4f7;color:var(--primary)}
+.rt-btn:disabled{opacity:.4;cursor:not-allowed}
+.rt-danger{color:#b42318}
+.rt-danger:not(:disabled):hover{background:#fdeaea;color:#b42318;border-color:#f5c2c0}
+.rt-foot{padding:12px 16px;border-top:1px solid #e6e9ef;color:#667085;font-size:13px;background:#fcfcfd}
+</style>
 <div class="page" style="background:#f6f8fb">
 <div class="container">
 <div style="margin-bottom:32px">
@@ -190,7 +243,14 @@ require 'partials_admin_nav.php';
 </div>
 <?php endif; ?>
 
-<div class="panel">
+<div class="rt-tabs">
+<?php foreach ($tabs as $k => $label): ?>
+<a href="<?=e($tabUrl($k))?>" class="rt-tab <?=$statusFilter === $k ? 'active' : ''?>"><?=$label?> <span><?=$counts[$k] ?? 0?></span></a>
+<?php endforeach; ?>
+<button type="button" onclick="openAddModal()" class="btn orange" style="margin-left:auto;gap:8px;padding:8px 16px"><i class="fas fa-plus"></i> Add Room Type</button>
+</div>
+
+<div class="panel rt-panel">
 <?php if(count($types) === 0): ?>
 <div style="text-align:center;padding:60px 20px">
 <i class="fas fa-layer-group" style="font-size:64px;color:#d9dee7;margin-bottom:20px"></i>
@@ -209,69 +269,73 @@ Create your first room type to get started
 <?php endif; ?>
 </div>
 <?php else: ?>
-<div class="table-wrap">
-<table class="table">
+<div class="rt-scroll">
+<table class="rt-table">
 <thead>
 <tr>
-<th style="width:80px">Image</th>
-<th>Room Type Name</th>
-<th>Description</th>
-<th style="width:120px;text-align:center">Rooms</th>
-<th style="width:120px;text-align:center">Status</th>
-<th style="width:240px;text-align:center">Actions</th>
+<th>Room Type</th>
+<th>Capacity</th>
+<th style="text-align:right">Price / night</th>
+<th>Rooms</th>
+<th>Status</th>
+<th style="text-align:right">Actions</th>
 </tr>
 </thead>
 <tbody>
-<?php foreach($types as $t): ?>
+<?php foreach($types as $t):
+    $active = $t['status'] === 'active';
+    $rc = (int)$t['room_count']; $ac = (int)$t['available_count'];
+?>
 <tr>
 <td>
-<?php if($t['image']): ?>
-<img src="<?=e($t['image'])?>" alt="<?=e($t['name'])?>" style="width:60px;height:60px;object-fit:cover;border-radius:6px;display:block">
-<?php else: ?>
-<div style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center">
-<i class="fas fa-image" style="font-size:20px;color:#999"></i>
+<div class="rt-type">
+<div class="rt-thumb">
+<?php if($t['image']): ?><img src="<?=e($t['image'])?>" alt="" loading="lazy" onerror="this.remove()"><?php endif; ?>
+<i class="fas fa-layer-group"></i>
 </div>
+<div style="min-width:0">
+<div class="rt-name"><?=e(rtrim($t['name'], '. '))?></div>
+<div class="rt-desc" title="<?=e($t['description'] ?: '')?>"><?=e($t['description'] ?: 'No description provided')?></div>
+</div>
+</div>
+</td>
+<td><span class="rt-cap"><i class="fas fa-user-friends"></i> Up to <?=(int)$t['capacity']?></span></td>
+<td style="text-align:right">
+<?php if ($rc): ?>
+<span class="rt-price">NPR <?=number_format((float)$t['min_price'])?><?=$t['min_price'] != $t['max_price'] ? '&ndash;' . number_format((float)$t['max_price']) : ''?></span>
+<?php else: ?><span class="rt-sub">&ndash;</span><?php endif; ?>
+</td>
+<td>
+<?php if ($rc): ?>
+<a class="rt-rooms" href="rooms.php?type=<?=$t['id']?>" title="View rooms of this type">
+<span><strong><?=$rc?></strong> room<?=$rc == 1 ? "" : "s"?></span>
+<span class="rt-bar"><span style="width:<?=round($ac / $rc * 100)?>%"></span></span>
+<span class="rt-sub"><?=$ac?> available</span>
+</a>
+<?php else: ?>
+<span class="rt-sub">No rooms yet</span>
 <?php endif; ?>
 </td>
 <td>
-<strong style="font-size:16px;color:var(--dark)"><?=e($t['name'])?></strong>
-</td>
-<td>
-<span class="muted" style="display:block;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?=e($t['description'] ?: 'No description provided')?>">
-<?=e($t['description'] ?: 'No description provided')?>
-</span>
-</td>
-<td style="text-align:center">
-<span style="background:#e8f5e9;color:#2e7d32;padding:6px 12px;border-radius:12px;font-size:13px;font-weight:700;display:inline-block">
-<i class="fas fa-door-open"></i> <?=$t['room_count']?>
-</span>
-</td>
-<td style="text-align:center">
-<span class="badge <?=$t['status']==='active'?'confirmed':'cancelled'?>" style="padding:6px 12px;border-radius:12px;font-size:12px;font-weight:700;display:inline-block">
-<?=$t['status']==='active'?'Active':'Inactive'?>
-</span>
-</td>
-<td>
-<div style="display:flex;gap:8px;align-items:center;justify-content:center">
-<form method="post" style="margin:0;display:inline-block">
+<form method="post" style="margin:0" onsubmit="return confirm('<?=$active ? 'Disable' : 'Enable'?> this room type?<?=$active ? '\\nIt will be hidden from customers.' : ''?>')">
 <input type="hidden" name="csrf" value="<?=csrf_token()?>">
 <input type="hidden" name="action" value="toggle_status">
 <input type="hidden" name="id" value="<?=$t['id']?>">
 <input type="hidden" name="status" value="<?=$t['status']?>">
-<button type="submit" class="btn small <?=$t['status']==='active'?'light':'orange'?>" style="display:inline-flex;align-items:center;gap:6px" onclick="return confirm('<?=$t['status']==='active'?'Disable':'Enable'?> this room type?')">
-<i class="fas fa-<?=$t['status']==='active'?'toggle-off':'toggle-on'?>"></i> <?=$t['status']==='active'?'Disable':'Enable'?>
+<button type="submit" class="rt-switch <?=$active ? 'on' : ''?>" title="<?=$active ? 'Hide from customers' : 'Show to customers'?>">
+<span class="knob"></span><?=$active ? 'Active' : 'Inactive'?>
 </button>
 </form>
-<button onclick='editRoomType(<?=json_encode($t)?>)' class="btn small orange" style="display:inline-flex;align-items:center;gap:6px">
-<i class="fas fa-edit"></i> Edit
-</button>
-<form method="post" style="margin:0;display:inline-block" onsubmit="return confirm('Are you sure you want to delete this room type?\n\nThis will permanently remove:\n- Room type: <?=e($t['name'])?>\n- Associated image\n\nThis action cannot be undone!')">
+</td>
+<td style="text-align:right">
+<div class="rt-actions">
+<a href="rooms.php?type=<?=$t['id']?>" class="rt-btn" title="View rooms" aria-label="View rooms"><i class="fas fa-bed"></i></a>
+<button type="button" class="rt-btn" title="Edit room type" aria-label="Edit room type" data-type="<?=e(json_encode($t))?>" onclick="editRoomType(JSON.parse(this.dataset.type))"><i class="fas fa-pen"></i></button>
+<form method="post" style="margin:0" onsubmit="return confirm('Delete room type <?=e(addslashes($t['name']))?>?\n\nThis cannot be undone.')">
 <input type="hidden" name="csrf" value="<?=csrf_token()?>">
 <input type="hidden" name="action" value="delete">
 <input type="hidden" name="id" value="<?=$t['id']?>">
-<button type="submit" class="btn small danger" style="display:inline-flex;align-items:center;gap:6px" <?=$t['room_count']>0?'disabled title="Cannot delete - ' . $t['room_count'] . ' room(s) exist"':''?>>
-<i class="fas fa-trash"></i> Delete
-</button>
+<button type="submit" class="rt-btn rt-danger" aria-label="Delete room type" <?=$rc > 0 ? 'disabled title="Cannot delete: ' . $rc . ' room(s) use this type"' : 'title="Delete room type"'?>><i class="fas fa-trash"></i></button>
 </form>
 </div>
 </td>
@@ -280,6 +344,7 @@ Create your first room type to get started
 </tbody>
 </table>
 </div>
+<div class="rt-foot">Showing <strong><?=count($types)?></strong> of <strong><?=$totalTypes ?? count($types)?></strong> room types</div>
 <?php endif; ?>
 </div>
 

@@ -12,9 +12,17 @@ CREATE TABLE users (
     name VARCHAR(120) NOT NULL,
     email VARCHAR(190) NOT NULL UNIQUE,
     phone VARCHAR(30),
+    date_of_birth DATE NULL,
+    gender ENUM('male','female','other') NULL,
+    address VARCHAR(255) NULL,
+    city VARCHAR(100) NULL,
+    country VARCHAR(100) NULL DEFAULT 'Nepal',
+    avatar VARCHAR(255) NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('customer','admin') NOT NULL DEFAULT 'customer',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status ENUM('active','inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 CREATE TABLE room_types (
@@ -140,6 +148,7 @@ CREATE TABLE payments (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     booking_id INT UNSIGNED NOT NULL,
     transaction_id VARCHAR(100),
+    pidx VARCHAR(64) NULL UNIQUE,
     amount DECIMAL(10,2) NOT NULL,
     method ENUM('demo','cash','esewa','khalti','card') DEFAULT 'demo',
     status ENUM('pending','paid','failed','refunded') DEFAULT 'pending',

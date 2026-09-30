@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Set default date values
-    document.querySelectorAll('input[type=date]').forEach(i => {
+    document.querySelectorAll('input[type=date]:not([data-no-default])').forEach(i => {
         if (!i.value) i.value = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     });
 
@@ -612,8 +612,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Check if ConfirmModal exists (for pages that have it)
             if (typeof ConfirmModal !== 'undefined') {
-                ConfirmModal.show('Are you sure you want to logout?', () => {
-                    window.location.href = logoutUrl;
+                ConfirmModal.show({
+                    title: 'Logout',
+                    message: 'Are you sure you want to logout?',
+                    confirmText: 'Logout',
+                    type: 'warning',
+                    icon: 'fa-sign-out-alt'
+                }).then(confirmed => {
+                    if (confirmed) window.location.href = logoutUrl;
                 });
             } else {
                 // Fallback to browser confirm

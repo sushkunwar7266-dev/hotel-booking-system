@@ -2,3 +2,9 @@ Options -Indexes
 <FilesMatch "\.(sql|md)$">
     Require all denied
 </FilesMatch>
+
+# Pretty booking detail URLs: /hotel/my_bookings/BK2609301A2B3C
+RewriteEngine On
+RewriteRule ^my_bookings/([A-Za-z0-9]{4,30})/?$ booking_details.php?code=$1 [L,QSA]
+RewriteRule ^admin/booking/([A-Za-z0-9]{4,30})/?$ admin/booking_details.php?code=$1 [L,QSA]
+RewriteRule ^profile/(personal|contact|password|account)/?$ profile.php?tab=$1 [L,QSA]

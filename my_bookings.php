@@ -61,6 +61,10 @@ $s->execute($params);
 $rows = $s->fetchAll();
 $title = 'My Bookings | ' . APP_NAME;
 require 'partials_header.php';
+$userNavActive = 'bookings';
+require 'partials_user_nav.php';
+?>
+<?php
 ?>
 <div class="page">
 <div class="container">
@@ -70,7 +74,7 @@ require 'partials_header.php';
 <!-- Search & Filter Panel -->
 <div class="panel" style="margin-bottom:24px">
 <form method="get" action="my_bookings.php">
-<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end">
+<div class="mb-filters">
 <div>
 <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px;color:var(--dark)">
 <i class="fas fa-search"></i> Search
@@ -163,103 +167,165 @@ Start exploring our rooms and make your first reservation
 </div>
 <?php else: ?>
 
-<div class="bookings-grid">
-<?php foreach($rows as $b): 
-$statusColors = [
-    'pending' => 'warning',
-    'confirmed' => 'success',
-    'cancelled' => 'danger',
-    'checked_in' => 'info',
-    'checked_out' => 'secondary'
-];
-$statusColor = $statusColors[$b['status']] ?? 'secondary';
-?>
-<div class="booking-card-item">
-<div class="booking-card-image">
-<img src="<?=e($b['room_image'])?>" alt="<?=e($b['type_name'])?>">
-<span class="booking-status-badge badge-<?=$statusColor?>"><?=ucfirst($b['status'])?></span>
-</div>
-<div class="booking-card-content">
-<div class="booking-card-header">
-<div>
-<h3 style="margin:0 0 6px;font-size:20px"><?=e($b['type_name'])?></h3>
-<p class="muted" style="margin:0;font-size:14px">Room <?=e($b['room_number'])?> • <?=e($b['booking_code'])?></p>
+<div class="mb-toolbar">
+<div class="mb-count"><strong><?=count($rows)?></strong> booking<?=count($rows) == 1 ? '' : 's'?></div>
+<div class="mb-view" role="group" aria-label="View">
+<button type="button" data-view="grid" title="Grid view" aria-label="Grid view"><i class="fas fa-th-large"></i><span>Grid</span></button>
+<button type="button" data-view="list" title="List view" aria-label="List view"><i class="fas fa-list"></i><span>List</span></button>
 </div>
 </div>
-<div class="booking-card-details">
-<div class="detail-row">
-<div class="detail-item">
-<i class="fas fa-calendar-alt"></i>
-<div>
-<div class="detail-label">Check-in</div>
-<div class="detail-value"><?=date('M d, Y', strtotime($b['check_in']))?></div>
-</div>
-</div>
-<div class="detail-item">
-<i class="fas fa-calendar-check"></i>
-<div>
-<div class="detail-label">Check-out</div>
-<div class="detail-value"><?=date('M d, Y', strtotime($b['check_out']))?></div>
-</div>
-</div>
-</div>
-<div class="detail-row">
-<div class="detail-item">
-<i class="fas fa-users"></i>
-<div>
-<div class="detail-label">Guests</div>
-<div class="detail-value"><?=$b['guests']?> guest<?=$b['guests']!=1?'s':''?></div>
-</div>
-</div>
-<div class="detail-item">
-<i class="fas fa-moon"></i>
-<div>
-<div class="detail-label">Nights</div>
-<div class="detail-value"><?=nights($b['check_in'], $b['check_out'])?> night<?=nights($b['check_in'], $b['check_out'])!=1?'s':''?></div>
-</div>
-</div>
-</div>
-</div>
-<div class="booking-card-footer">
-<div class="booking-price">
-<div class="price-label">Total Amount</div>
-<div class="price-value">NPR <?=number_format((float)$b['total_amount'])?></div>
-</div>
-<div class="booking-actions">
-<a href="room.php?id=<?=$b['room_id']?>&check_in=<?=urlencode($b['check_in'])?>&check_out=<?=urlencode($b['check_out'])?>&guests=<?=$b['guests']?>" class="btn light" style="display:inline-flex;align-items:center;gap:6px">
-<i class="fas fa-eye"></i> View Room
-</a>
-<?php if(in_array($b['status'], ['pending', 'confirmed'])): ?>
-<a href="cancel.php?id=<?=$b['id']?>" class="btn danger small" onclick="return confirm('Are you sure you want to cancel this booking?')" style="display:inline-flex;align-items:center;gap:6px">
-<i class="fas fa-times"></i> Cancel
-</a>
-<?php endif;?>
-</div>
-</div>
-<div class="payment-info" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#f6f8fb;border-top:1px solid #e6e9ef">
-<div style="display:flex;align-items:center;gap:8px">
+
+<div class="mb-cards mb-grid" id="mbCards">
 <?php
-$paymentColors = [
-    'pending' => '#ffc107',
-    'paid' => '#28a745',
-    'failed' => '#dc3545',
-    'refunded' => '#6c757d'
-];
-$paymentColor = $paymentColors[$b['payment_status']] ?? '#6c757d';
+$mbStatus = ['pending' => ['#fff4e0', '#b26a00', 'fa-hourglass-half', 'Pending'], 'confirmed' => ['#e6f6ec', '#1e7b3c', 'fa-check-circle', 'Confirmed'],
+             'checked_in' => ['#e3effd', '#1d5fa8', 'fa-door-open', 'Checked in'], 'checked_out' => ['#eef0f3', '#4a5563', 'fa-door-closed', 'Completed'],
+             'cancelled' => ['#fdeaea', '#b42318', 'fa-ban', 'Cancelled']];
+$mbPay = ['paid' => ['#1e7b3c', 'fa-check-circle', 'Paid'], 'pending' => ['#b26a00', 'fa-clock', 'Payment pending'],
+          'failed' => ['#b42318', 'fa-times-circle', 'Payment failed'], 'refunded' => ['#4a5563', 'fa-undo', 'Refunded']];
+$today = new DateTime('today');
+foreach($rows as $b):
+    [$sbg, $sfg, $sicon, $slabel] = $mbStatus[$b['status']] ?? ['#eef0f3', '#4a5563', 'fa-circle', ucfirst($b['status'])];
+    [$pfg, $picon, $plabel] = $mbPay[$b['payment_status']] ?? ['#4a5563', 'fa-circle', ucfirst($b['payment_status'])];
+    $n = nights($b['check_in'], $b['check_out']);
+    $ci = new DateTime($b['check_in']); $co = new DateTime($b['check_out']);
+    $days = (int)$today->diff($ci)->format('%r%a');
+    $activeStatus = in_array($b['status'], ['pending', 'confirmed'], true);
+    $when = '';
+    if ($b['status'] === 'checked_in') $when = 'Staying now';
+    elseif ($activeStatus && $days > 1) $when = "In $days days";
+    elseif ($activeStatus && $days === 1) $when = 'Tomorrow';
+    elseif ($activeStatus && $days === 0) $when = 'Today';
+    $canPay = $b['status'] === 'pending' && $b['payment_status'] !== 'paid';
+    $canCancel = $activeStatus;
+    $detailUrl = '/hotel/my_bookings/' . $b['booking_code'];
 ?>
-<i class="fas fa-<?=$b['payment_status']==='paid'?'check-circle':'clock'?>" style="color:<?=$paymentColor?>"></i>
-<span>Payment: <strong style="color:<?=$paymentColor?>"><?=ucfirst($b['payment_status'])?></strong></span>
+<article class="mb-card<?=$b['status'] === 'cancelled' ? ' is-cancelled' : ''?>">
+<a href="<?=e($detailUrl)?>" class="mb-media" aria-label="Booking <?=e($b['booking_code'])?>">
+<?php if (!empty($b['room_image'])): ?><img src="<?=e($b['room_image'])?>" alt="" loading="lazy" onerror="this.remove()"><?php endif; ?>
+<i class="fas fa-bed mb-media-fallback"></i>
+<span class="mb-status" style="background:<?=$sbg?>;color:<?=$sfg?>"><i class="fas <?=$sicon?>"></i> <?=$slabel?></span>
+<?php if ($when): ?><span class="mb-when"><i class="fas fa-clock"></i> <?=$when?></span><?php endif; ?>
+</a>
+<div class="mb-body">
+<div class="mb-head">
+<div style="min-width:0">
+<h3 class="mb-title"><?=e(rtrim($b['type_name'], '. '))?></h3>
+<div class="mb-meta">Room <?=e($b['room_number'])?> &middot; <?=(int)$b['guests']?> guest<?=$b['guests'] == 1 ? '' : 's'?> &middot; <span class="mb-code"><?=e($b['booking_code'])?></span></div>
 </div>
-<?php if($b['payment_status'] === 'pending' && $b['status'] === 'pending'): ?>
-<span class="muted" style="font-size:12px">Awaiting admin confirmation</span>
+</div>
+<div class="mb-dates">
+<div><span>Check-in</span><strong><?=$ci->format('D, M j')?></strong><small><?=$ci->format('Y')?></small></div>
+<div class="mb-nights"><i class="fas fa-moon"></i><?=$n?> night<?=$n == 1 ? '' : 's'?></div>
+<div style="text-align:right"><span>Check-out</span><strong><?=$co->format('D, M j')?></strong><small><?=$co->format('Y')?></small></div>
+</div>
+</div>
+<div class="mb-side">
+<div class="mb-price">
+<div>
+<span class="mb-price-label">Total</span>
+<strong>NPR <?=number_format((float)$b['total_amount'])?></strong>
+</div>
+<span class="mb-pay" style="color:<?=$pfg?>"><i class="fas <?=$picon?>"></i> <?=$plabel?></span>
+</div>
+<div class="mb-actions">
+<?php if ($canPay): ?>
+<a href="/hotel/payment.php?id=<?=$b['id']?>" class="mb-btn mb-khalti"><i class="fas fa-wallet"></i> Pay now</a>
+<?php endif; ?>
+<a href="<?=e($detailUrl)?>" class="mb-btn mb-primary"><i class="fas fa-file-invoice"></i> Details</a>
+<div class="mb-more">
+<a href="room.php?id=<?=$b['room_id']?>" class="mb-icon" title="View room" aria-label="View room"><i class="fas fa-eye"></i></a>
+<?php if ($canCancel): ?>
+<a href="cancel.php?id=<?=$b['id']?>" class="mb-icon mb-danger" title="Cancel booking" aria-label="Cancel booking" onclick="return confirm('Are you sure you want to cancel this booking?')"><i class="fas fa-times"></i></a>
 <?php endif; ?>
 </div>
 </div>
 </div>
+</article>
 <?php endforeach; ?>
 </div>
+
+<style>
+.mb-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}
+.mb-count{color:#667085;font-size:14px}
+.mb-count strong{color:#1d2939}
+.mb-view{display:inline-flex;background:#fff;border:1px solid #e3e7ee;border-radius:10px;padding:3px}
+.mb-view button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:#667085;font-weight:600;font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer}
+.mb-view button.active{background:var(--primary);color:#fff}
+.mb-cards{display:grid;gap:18px}
+.mb-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.mb-card{background:#fff;border:1px solid #e6e9ef;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(16,24,40,.04);transition:box-shadow .2s,transform .2s}
+.mb-card:hover{box-shadow:0 10px 24px rgba(16,24,40,.08);transform:translateY(-2px)}
+.mb-card.is-cancelled .mb-media img{filter:grayscale(.7) opacity(.8)}
+.mb-media{position:relative;display:block;aspect-ratio:16/9;background:#eef1f6;overflow:hidden}
+.mb-media img{position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.mb-card:hover .mb-media img{transform:scale(1.04)}
+.mb-media-fallback{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:28px;color:#c5ccd6}
+.mb-media:after{content:"";position:absolute;inset:auto 0 0 0;height:45%;background:linear-gradient(transparent,rgba(0,0,0,.35));pointer-events:none;z-index:1}
+.mb-status{position:absolute;top:12px;left:12px;z-index:2;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.mb-when{position:absolute;bottom:12px;left:12px;z-index:2;color:#fff;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.mb-body{padding:16px 18px 0;flex:1}
+.mb-title{margin:0;font-size:18px;color:#1d2939;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mb-meta{color:#667085;font-size:13px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mb-code{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.mb-dates{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:14px 0 0;padding:12px 14px;background:#f8fafc;border-radius:12px}
+.mb-dates span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:700}
+.mb-dates strong{display:block;font-size:14px;color:#1d2939;margin-top:2px;white-space:nowrap}
+.mb-dates small{color:#98a2b3;font-size:11px}
+.mb-nights{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#667085;white-space:nowrap}
+.mb-nights i{color:var(--accent)}
+.mb-side{padding:14px 18px 16px}
+.mb-price{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:12px}
+.mb-price-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#98a2b3;font-weight:700}
+.mb-price strong{font-size:20px;color:var(--primary);white-space:nowrap}
+.mb-pay{font-size:12px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.mb-actions{display:flex;gap:8px;align-items:center}
+.mb-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;transition:.15s}
+.mb-primary{background:var(--primary);color:#fff}
+.mb-primary:hover{background:#0f2b4d;color:#fff}
+.mb-khalti{background:#5C2D91;color:#fff}
+.mb-khalti:hover{background:#4a2377;color:#fff}
+.mb-more{display:flex;gap:6px}
+.mb-icon{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid #e3e7ee;color:#475467;text-decoration:none;transition:.15s}
+.mb-icon:hover{background:#f2f4f7;color:var(--primary)}
+.mb-danger:hover{background:#fdeaea;color:#b42318;border-color:#f5c2c0}
+/* List view */
+.mb-list .mb-price{flex-direction:column;align-items:flex-start;gap:4px}
+.mb-list{grid-template-columns:1fr;gap:12px}
+.mb-list .mb-card{flex-direction:row;align-items:stretch}
+.mb-list .mb-card:hover{transform:none}
+.mb-list .mb-media{aspect-ratio:auto;width:220px;flex:none}
+.mb-list .mb-body{padding:16px 18px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.mb-list .mb-dates{margin-top:12px;max-width:380px}
+.mb-list .mb-side{width:300px;flex:none;border-left:1px solid #f0f2f5;display:flex;flex-direction:column;justify-content:center}
+@media (max-width:900px){
+  .mb-list .mb-card{flex-direction:column}
+  .mb-list .mb-media{width:100%;aspect-ratio:16/7}
+  .mb-list .mb-side{width:auto;border-left:0;border-top:1px solid #f0f2f5}
+  .mb-list .mb-dates{max-width:none}
+}
+@media (max-width:520px){.mb-view span{display:none}}
+.mb-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end}
+@media (max-width:900px){.mb-filters{grid-template-columns:1fr 1fr}.mb-filters>div:first-child{grid-column:1/-1}}
+@media (max-width:520px){.mb-filters{grid-template-columns:1fr}}
+</style>
+<script>
+(function () {
+    var box = document.getElementById('mbCards');
+    var btns = document.querySelectorAll('.mb-view button');
+    function setView(v) {
+        box.classList.toggle('mb-grid', v === 'grid');
+        box.classList.toggle('mb-list', v === 'list');
+        btns.forEach(function (b) { b.classList.toggle('active', b.dataset.view === v); b.setAttribute('aria-pressed', b.dataset.view === v); });
+        try { localStorage.setItem('myBookingsView', v); } catch (e) {}
+    }
+    var saved = 'grid';
+    try { saved = localStorage.getItem('myBookingsView') || 'grid'; } catch (e) {}
+    setView(saved === 'list' ? 'list' : 'grid');
+    btns.forEach(function (b) { b.addEventListener('click', function () { setView(b.dataset.view); }); });
+})();
+</script>
 <?php endif; ?>
 
 </div>
 </div>
-<?php require 'partials_footer.php'; ?>
+<?php require 'partials_user_footer.php'; ?>

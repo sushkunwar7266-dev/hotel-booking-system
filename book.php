@@ -10,6 +10,13 @@ $in = $_POST['check_in'];
 $out = $_POST['check_out'];
 $guests = (int)$_POST['guests'];
 $special = trim($_POST['special_request'] ?? '');
+$paymentMethod = ($_POST['payment_method'] ?? 'khalti') === 'hotel' ? 'hotel' : 'khalti';
+
+// Return to checkout with the customer's input kept
+function back_to_checkout(int $roomId, string $in, string $out, int $guests): never {
+    $_SESSION['checkout_old'] = array_intersect_key($_POST, array_flip(['contact_name', 'contact_email', 'contact_phone', 'special_request', 'payment_method']));
+    redirect("checkout.php?room_id=$roomId&check_in=" . urlencode($in) . "&check_out=" . urlencode($out) . "&guests=$guests");
+}
 
 // Contact information
 $contactName = trim($_POST['contact_name'] ?? '');
@@ -83,7 +90,7 @@ if(strlen($special) > 500) {
 
 if(count($errors) > 0) {
     flash('error', implode("\n", $errors));
-    redirect("room.php?id=$roomId&check_in=" . urlencode($in) . "&check_out=" . urlencode($out) . "&guests=$guests");
+    back_to_checkout($roomId, $in, $out, $guests);
 }
 
 $n = nights($in, $out);
@@ -98,7 +105,7 @@ if(!$room) {
 
 if($guests > $room['capacity']) {
     flash('error', 'Number of guests exceeds room capacity (' . $room['capacity'] . ')');
-    redirect("room.php?id=$roomId&check_in=" . urlencode($in) . "&check_out=" . urlencode($out) . "&guests=$guests");
+    back_to_checkout($roomId, $in, $out, $guests);
 }
 
 if(!is_room_available($roomId, $in, $out)) {
@@ -166,7 +173,16 @@ try {
     $bid = (int)$pdo->lastInsertId();
     
     $pdo->commit();
-    flash('success', "Booking request submitted! Your booking code is: $code. Please wait for admin confirmation.");
+    if($paymentMethod === 'hotel') {
+        flash('success', "Booking request submitted! Your booking code is: $code. Pay at the hotel; the admin will confirm your booking.");
+        redirect('my_bookings.php');
+    }
+    $payUrl = khalti_start($bid, $user, $payErr);
+    if($payUrl) {
+        header('Location: ' . $payUrl);
+        exit;
+    }
+    flash('error', "Booking $code was saved, but Khalti could not be started: $payErr Use \"Pay with Khalti\" in My Bookings to try again.");
     redirect('my_bookings.php');
 } catch(Throwable $e) {
     $pdo->rollBack();
@@ -178,5 +194,5 @@ try {
     } else {
         flash('error', 'Could not create booking. Please try again.');
     }
-    redirect("room.php?id=$roomId&check_in=" . urlencode($in) . "&check_out=" . urlencode($out) . "&guests=$guests");
+    back_to_checkout($roomId, $in, $out, $guests);
 }

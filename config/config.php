@@ -4,7 +4,7 @@ declare(strict_types=1);
 // Secure session configuration
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_secure', '0'); // Set to '1' if using HTTPS
-ini_set('session.cookie_samesite', 'Strict');
+ini_set('session.cookie_samesite', 'Lax'); // Lax so the session survives the redirect back from Khalti
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 ini_set('session.cookie_lifetime', '0'); // Session cookie expires when browser closes
@@ -77,6 +77,15 @@ const DB_PASS = '';
 
 const APP_NAME = 'StayEase Hotel Booking';
 const CURRENCY = 'NPR';
+
+// Base URL of the site, used to build the Khalti return URL
+const APP_URL = 'http://localhost/hotel';
+
+// Khalti ePayment (KPG-2). Sandbox: https://dev.khalti.com/api/v2/  Production: https://khalti.com/api/v2/
+// Use the "live_secret_key" from test-admin.khalti.com (sandbox) or admin.khalti.com (production).
+// The key below is Khalti's public sandbox sample key; replace it with your own merchant key.
+const KHALTI_BASE_URL = 'https://dev.khalti.com/api/v2/';
+const KHALTI_SECRET_KEY = '05bf95cc57244045b8df5fad06748dab';
 
 function db(): PDO {
     static $pdo = null;
@@ -151,7 +160,7 @@ function verify_csrf(): void {
 
 function current_user(): ?array {
     if (empty($_SESSION['user_id'])) return null;
-    $stmt = db()->prepare("SELECT id,name,email,phone,role FROM users WHERE id=?");
+    $stmt = db()->prepare("SELECT id,name,email,phone,role,avatar FROM users WHERE id=?");
     $stmt->execute([$_SESSION['user_id']]);
     return $stmt->fetch() ?: null;
 }
@@ -252,4 +261,92 @@ function is_room_available(int $roomId, string $checkin, string $checkout, ?int 
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
     return (int)$stmt->fetchColumn() === 0;
+}
+
+/**
+ * Call a Khalti ePayment API endpoint (e.g. 'epayment/initiate/' or 'epayment/lookup/').
+ * Returns ['code' => HTTP status, 'body' => decoded JSON array or null].
+ */
+function khalti_request(string $endpoint, array $payload): array {
+    $ch = curl_init(KHALTI_BASE_URL . $endpoint);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Key ' . KHALTI_SECRET_KEY,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => json_encode($payload),
+    ]);
+    $raw = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($raw === false) {
+        error_log('Khalti request failed: ' . curl_error($ch));
+    }
+    curl_close($ch);
+    return ['code' => $code, 'body' => $raw ? json_decode($raw, true) : null];
+}
+
+/**
+ * Start a Khalti payment for a pending booking owned by $user.
+ * Records the pending payment (linked by pidx) and returns Khalti's payment_url, or null with $error set.
+ */
+function khalti_start(int $bookingId, array $user, ?string &$error = null): ?string {
+    $pdo = db();
+    $s = $pdo->prepare("SELECT b.*, r.room_number, rt.name type_name FROM bookings b JOIN rooms r ON r.id=b.room_id JOIN room_types rt ON rt.id=r.room_type_id WHERE b.id=? AND b.user_id=?");
+    $s->execute([$bookingId, $user['id']]);
+    $b = $s->fetch();
+    if (!$b || $b['status'] !== 'pending' || $b['payment_status'] === 'paid') {
+        $error = 'This booking cannot be paid.';
+        return null;
+    }
+
+    $amountPaisa = (int)round((float)$b['total_amount'] * 100); // Khalti expects paisa
+    if ($amountPaisa < 1000) {
+        $error = 'Khalti requires a minimum payment of NPR 10.';
+        return null;
+    }
+
+    $payload = [
+        'return_url' => APP_URL . '/khalti_return.php',
+        'website_url' => APP_URL . '/',
+        'amount' => $amountPaisa,
+        'purchase_order_id' => $b['booking_code'],
+        'purchase_order_name' => 'Room ' . $b['room_number'] . ' (' . $b['type_name'] . ')',
+        'customer_info' => array_filter([
+            'name' => $user['name'],
+            'email' => $user['email'],
+            'phone' => $user['phone'] ?? '',
+        ]),
+        'product_details' => [[
+            'identity' => (string)$b['room_id'],
+            'name' => $b['type_name'] . ' - Room ' . $b['room_number'],
+            'total_price' => $amountPaisa,
+            'quantity' => 1,
+            'unit_price' => $amountPaisa,
+        ]],
+        'merchant_booking_id' => (string)$b['id'],
+    ];
+
+    $res = khalti_request('epayment/initiate/', $payload);
+    $body = $res['body'] ?? [];
+    $host = parse_url($body['payment_url'] ?? '', PHP_URL_HOST) ?: '';
+    if ($res['code'] !== 200 || empty($body['pidx']) || !preg_match('/(^|\.)khalti\.com$/', $host)) {
+        error_log('Khalti initiate failed: HTTP ' . $res['code'] . ' ' . json_encode($body));
+        $error = 'Could not start Khalti payment. Please try again.';
+        return null;
+    }
+
+    $existing = $pdo->prepare("SELECT id FROM payments WHERE booking_id=? AND status IN ('pending','failed') ORDER BY id DESC LIMIT 1");
+    $existing->execute([$bookingId]);
+    $pid = $existing->fetchColumn();
+    if ($pid) {
+        $pdo->prepare("UPDATE payments SET method='khalti', pidx=?, amount=?, status='pending', transaction_id=NULL, paid_at=NULL WHERE id=?")
+            ->execute([$body['pidx'], $b['total_amount'], $pid]);
+    } else {
+        $pdo->prepare("INSERT INTO payments (booking_id, pidx, amount, method, status) VALUES (?, ?, ?, 'khalti', 'pending')")
+            ->execute([$bookingId, $body['pidx'], $b['total_amount']]);
+    }
+    return $body['payment_url'];
 }

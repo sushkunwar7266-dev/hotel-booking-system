@@ -56,7 +56,9 @@ $offset = ($page - 1) * $perPage;
 $sql = "SELECT u.*, 
         COUNT(DISTINCT b.id) as total_bookings,
         COUNT(DISTINCT CASE WHEN b.status='confirmed' THEN b.id END) as confirmed_bookings,
-        COALESCE(SUM(CASE WHEN p.status='paid' THEN p.amount END), 0) as total_spent
+        COALESCE(SUM(CASE WHEN p.status='paid' THEN p.amount END), 0) as total_spent,
+        COUNT(DISTINCT CASE WHEN b.status IN ('pending','confirmed','checked_in') AND b.check_out >= CURDATE() THEN b.id END) as active_bookings,
+        MAX(b.created_at) as last_booking
         FROM users u
         LEFT JOIN bookings b ON b.user_id = u.id
         LEFT JOIN payments p ON p.booking_id = b.id
@@ -132,10 +134,61 @@ $activeStmt = db()->prepare("SELECT COUNT(*) FROM users WHERE role='customer' AN
 $activeStmt->execute();
 $activeCustomers = (int)$activeStmt->fetchColumn();
 
+$counts = ['' => $totalCustomersAll, 'active' => $activeCustomers, 'inactive' => $totalCustomersAll - $activeCustomers];
+$tabs = ['' => 'All Customers', 'active' => 'Active', 'inactive' => 'Inactive'];
+$tabUrl = function ($st) use ($search, $sortBy) {
+    return 'customers.php?' . http_build_query(array_filter(['status' => $st, 'search' => $search, 'sort' => $sortBy !== 'created_desc' ? $sortBy : '']));
+};
+$avatarColors = ['#173b67', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#15803d', '#4338ca'];
+
 require '../partials_header.php';
 require 'partials_admin_nav.php';
 ?>
 
+<style>
+.cu-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.cu-tab{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#fff;border:1px solid #e3e7ee;color:#475467;font-weight:600;font-size:13px;text-decoration:none;transition:.15s}
+.cu-tab span{background:#eef1f6;color:#475467;border-radius:999px;padding:1px 8px;font-size:12px}
+.cu-tab:hover{border-color:var(--primary);color:var(--primary)}
+.cu-tab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.cu-tab.active span{background:rgba(255,255,255,.2);color:#fff}
+.cu-panel{padding:0!important;overflow:hidden}
+.cu-scroll{overflow-x:auto}
+.cu-table{width:100%;border-collapse:separate;border-spacing:0;min-width:880px}
+.cu-table thead th{background:#f8fafc;color:#667085;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:12px 8px;border-bottom:1px solid #e6e9ef;text-align:left;white-space:nowrap}
+.cu-table td{padding:13px 8px;border-bottom:1px solid #f0f2f5;vertical-align:middle;font-size:14px}
+.cu-table th:first-child,.cu-table td:first-child{padding-left:16px}
+.cu-table th:last-child,.cu-table td:last-child{padding-right:16px}
+.cu-table tbody tr{transition:background .12s}
+.cu-table tbody tr:hover{background:#f8fafc}
+.cu-table tbody tr:last-child td{border-bottom:0}
+.cu-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cu-person{display:flex;align-items:center;gap:12px}
+.cu-avatar{position:relative;overflow:hidden;width:38px;height:38px;border-radius:50%;color:#fff;font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.cu-name{font-weight:700;color:#1d2939;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.cu-sub{color:#667085;font-size:12px;margin-top:2px;white-space:nowrap}
+.cu-contact{display:flex;align-items:center;gap:7px;font-size:13px;color:#344054;text-decoration:none;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cu-contact i{font-size:11px;color:#98a2b3;width:12px}
+.cu-contact:hover{color:var(--primary)}
+.cu-muted{color:#667085;margin-top:3px;font-size:12px}
+.cu-link{font-size:13px;color:#1d2939;text-decoration:none;white-space:nowrap}
+.cu-link:hover{color:var(--primary);text-decoration:underline}
+.cu-money{font-weight:700;color:#1d2939;white-space:nowrap}
+.cu-date{font-size:13px;color:#344054;white-space:nowrap}
+.cu-switch{display:inline-flex;align-items:center;gap:8px;border:0;background:#eef0f3;color:#4a5563;border-radius:999px;padding:4px 12px 4px 4px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
+.cu-switch .knob{width:26px;height:16px;border-radius:99px;background:#c5ccd6;position:relative;transition:.15s}
+.cu-switch .knob:after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:.15s}
+.cu-switch.on{background:#e6f6ec;color:#1e7b3c}
+.cu-switch.on .knob{background:#28a745}
+.cu-switch.on .knob:after{left:12px}
+.cu-actions{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end}
+.cu-btn{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #d9dee7;background:#fff;color:#344054;font-size:13px;cursor:pointer;text-decoration:none;transition:.12s}
+.cu-btn:hover{background:#f2f4f7;color:var(--primary)}
+.cu-btn:disabled{opacity:.4;cursor:not-allowed}
+.cu-danger{color:#b42318}
+.cu-danger:not(:disabled):hover{background:#fdeaea;color:#b42318;border-color:#f5c2c0}
+.cu-foot{padding:12px 16px;border-top:1px solid #e6e9ef;color:#667085;font-size:13px;background:#fcfcfd}
+</style>
 <div class="page" style="background:#f6f8fb">
 <div class="container">
 <div style="margin-bottom:32px">
@@ -209,7 +262,13 @@ require 'partials_admin_nav.php';
 </div>
 <?php endif; ?>
 
-<div class="panel">
+<div class="cu-tabs">
+<?php foreach ($tabs as $k => $label): ?>
+<a href="<?=e($tabUrl($k))?>" class="cu-tab <?=$statusFilter === $k ? 'active' : ''?>"><?=$label?> <span><?=$counts[$k]?></span></a>
+<?php endforeach; ?>
+</div>
+
+<div class="panel cu-panel">
 <?php if(count($customers) === 0): ?>
 <div style="text-align:center;padding:60px 20px">
 <i class="fas fa-users" style="font-size:64px;color:#d9dee7;margin-bottom:20px"></i>
@@ -226,78 +285,67 @@ Customers will appear here once they register
 <?php endif; ?>
 </div>
 <?php else: ?>
-<div class="table-wrap">
-<table class="table">
+<div class="cu-scroll">
+<table class="cu-table">
 <thead>
 <tr>
 <th>Customer</th>
 <th>Contact</th>
-<th style="width:80px;text-align:center">Bookings</th>
-<th style="width:100px;text-align:center">Spent</th>
-<th style="width:80px;text-align:center">Status</th>
-<th style="width:220px;text-align:center">Actions</th>
+<th>Bookings</th>
+<th style="text-align:right">Total paid</th>
+<th>Last booking</th>
+<th>Status</th>
+<th style="text-align:right">Actions</th>
 </tr>
 </thead>
 <tbody>
-<?php foreach($customers as $c): ?>
+<?php foreach($customers as $c):
+    $active = $c['status'] === 'active';
+    $words = array_slice(preg_split('/\s+/', trim($c['name'])), 0, 2);
+    $initials = strtoupper(implode('', array_map(fn($w) => mb_substr($w, 0, 1), $words)));
+    $color = $avatarColors[$c['id'] % count($avatarColors)];
+    $tb = (int)$c['total_bookings']; $ab = (int)$c['active_bookings'];
+?>
 <tr>
 <td>
-<div style="display:flex;align-items:center;gap:10px">
-<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0">
-<?=strtoupper(substr($c['name'], 0, 1))?>
-</div>
+<div class="cu-person">
+<span class="cu-avatar" style="background:<?=$color?>"><?=e($initials ?: '?')?><?php if (!empty($c['avatar'])): ?><img src="<?=e($c['avatar'])?>" alt="" loading="lazy" onerror="this.remove()"><?php endif; ?></span>
 <div style="min-width:0">
-<strong style="font-size:14px;color:var(--dark);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?=e($c['name'])?>"><?=e($c['name'])?></strong>
-<span class="muted" style="font-size:11px">ID: <?=$c['id']?></span>
+<div class="cu-name"><?=e($c['name'])?></div>
+<div class="cu-sub">Joined <?=date('M Y', strtotime($c['created_at']))?> &middot; #<?=$c['id']?></div>
 </div>
 </div>
-</td>
-<td style="min-width:0">
-<div style="font-size:13px">
-<a href="mailto:<?=e($c['email'])?>" style="color:var(--primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?=e($c['email'])?>">
-<i class="fas fa-envelope" style="margin-right:4px;font-size:11px"></i><?=e($c['email'])?>
-</a>
-<?php if($c['phone']): ?>
-<a href="tel:<?=e($c['phone'])?>" style="color:var(--muted);text-decoration:none;font-size:12px;display:block;margin-top:2px">
-<i class="fas fa-phone" style="margin-right:4px;font-size:10px"></i><?=e($c['phone'])?>
-</a>
-<?php endif; ?>
-</div>
-</td>
-<td style="text-align:center">
-<span style="background:#e3f2fd;color:#1976d2;padding:4px 10px;border-radius:10px;font-size:12px;font-weight:700;display:inline-block">
-<?=$c['total_bookings']?>
-</span>
-</td>
-<td style="text-align:center">
-<strong style="color:var(--primary);font-size:13px;white-space:nowrap">NPR <?=number_format((float)$c['total_spent'])?></strong>
-</td>
-<td style="text-align:center">
-<span class="badge <?=$c['status']==='active'?'confirmed':'cancelled'?>" style="padding:4px 10px;border-radius:10px;font-size:11px;font-weight:700;display:inline-block">
-<?=ucfirst($c['status'])?>
-</span>
 </td>
 <td>
-<div style="display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap">
-<a href="bookings.php?customer=<?=$c['id']?>" class="btn small orange" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:12px" title="View Bookings">
-<i class="fas fa-eye"></i> View
-</a>
-<form method="post" style="margin:0;display:inline-block">
+<a class="cu-contact" href="mailto:<?=e($c['email'])?>" title="<?=e($c['email'])?>"><i class="fas fa-envelope"></i><?=e($c['email'])?></a>
+<?php if($c['phone']): ?><a class="cu-contact cu-muted" href="tel:<?=e($c['phone'])?>"><i class="fas fa-phone"></i><?=e($c['phone'])?></a><?php endif; ?>
+</td>
+<td>
+<?php if ($tb): ?>
+<a class="cu-link" href="bookings.php?customer=<?=$c['id']?>"><strong><?=$tb?></strong> booking<?=$tb == 1 ? '' : 's'?></a>
+<div class="cu-sub"><?=$ab ? '<span style="color:#1e7b3c;font-weight:600">' . $ab . ' upcoming</span>' : 'None upcoming'?></div>
+<?php else: ?><span class="cu-sub">No bookings yet</span><?php endif; ?>
+</td>
+<td style="text-align:right"><span class="cu-money"><?=$c['total_spent'] > 0 ? 'NPR ' . number_format((float)$c['total_spent']) : '<span class="cu-sub">&ndash;</span>'?></span></td>
+<td><?=$c['last_booking'] ? '<span class="cu-date">' . date('M j, Y', strtotime($c['last_booking'])) . '</span>' : '<span class="cu-sub">&ndash;</span>'?></td>
+<td>
+<form method="post" style="margin:0" onsubmit="return confirm('<?=$active ? 'Deactivate' : 'Activate'?> <?=e(addslashes($c['name']))?>?<?=$active ? '\nThey will not be able to log in.' : ''?>')">
 <input type="hidden" name="csrf" value="<?=csrf_token()?>">
 <input type="hidden" name="action" value="toggle_status">
 <input type="hidden" name="id" value="<?=$c['id']?>">
 <input type="hidden" name="current_status" value="<?=$c['status']?>">
-<button type="submit" class="btn small <?=$c['status']==='active'?'light':'orange'?>" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:12px" onclick="return confirm('<?=$c['status']==='active'?'Deactivate':'Activate'?> this customer account?')" title="<?=$c['status']==='active'?'Deactivate':'Activate'?>">
-<i class="fas fa-<?=$c['status']==='active'?'ban':'check'?>"></i>
-</button>
+<button type="submit" class="cu-switch <?=$active ? 'on' : ''?>" title="<?=$active ? 'Deactivate account' : 'Activate account'?>"><span class="knob"></span><?=$active ? 'Active' : 'Inactive'?></button>
 </form>
-<form method="post" style="margin:0;display:inline-block" onsubmit="return confirm('Are you sure you want to delete this customer?\n\nCustomer: <?=e($c['name'])?>\nEmail: <?=e($c['email'])?>\n\nThis action cannot be undone.')">
+</td>
+<td style="text-align:right">
+<div class="cu-actions">
+<a href="bookings.php?customer=<?=$c['id']?>" class="cu-btn" title="View bookings" aria-label="View bookings"><i class="fas fa-calendar-check"></i></a>
+<a href="mailto:<?=e($c['email'])?>" class="cu-btn" title="Send email" aria-label="Send email"><i class="fas fa-envelope"></i></a>
+<form method="post" style="margin:0" onsubmit="return confirm('Delete customer <?=e(addslashes($c['name']))?>?\n\nThis action cannot be undone.')">
 <input type="hidden" name="csrf" value="<?=csrf_token()?>">
 <input type="hidden" name="action" value="delete">
 <input type="hidden" name="id" value="<?=$c['id']?>">
-<button type="submit" class="btn small danger" style="display:inline-flex;align-items:center;gap:4px;padding:6px 10px;font-size:12px" <?=$c['total_bookings']>0?'disabled title="Cannot delete - ' . $c['total_bookings'] . ' booking(s) exist"':''?> title="Delete">
-<i class="fas fa-trash"></i>
-</button>
+<button type="submit" class="cu-btn cu-danger" aria-label="Delete customer" <?=$tb > 0 ? 'disabled title="Cannot delete: ' . $tb . ' booking(s) exist"' : 'title="Delete customer"'?>><i class="fas fa-trash"></i></button>
 </form>
 </div>
 </td>
@@ -306,6 +354,7 @@ Customers will appear here once they register
 </tbody>
 </table>
 </div>
+<div class="cu-foot">Showing <strong><?=$offset + 1?>&ndash;<?=$offset + count($customers)?></strong> of <strong><?=$totalCustomers?></strong> customers</div>
 <?php endif; ?>
 </div>
 
@@ -371,4 +420,3 @@ Page <?=$page?> of <?=$totalPages?> (<?=$totalCustomers?> total)
 </div>
 </div>
 <?php require 'partials_admin_footer.php'; ?>
->
